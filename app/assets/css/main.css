@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Tiptap editor styles */
+.tiptap-editor .ProseMirror {
+  @apply outline-none min-h-[120px] p-3;
+}
+
+.tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
+  @apply text-muted-foreground pointer-events-none float-left h-0;
+  content: attr(data-placeholder);
+}
+
+.tiptap-editor .ProseMirror h1 { @apply text-2xl font-bold mb-2; }
+.tiptap-editor .ProseMirror h2 { @apply text-xl font-semibold mb-2; }
+.tiptap-editor .ProseMirror h3 { @apply text-lg font-medium mb-1; }
+.tiptap-editor .ProseMirror ul { @apply list-disc pl-5 mb-2; }
+.tiptap-editor .ProseMirror ol { @apply list-decimal pl-5 mb-2; }
+.tiptap-editor .ProseMirror blockquote { @apply border-l-4 border-border pl-4 italic; }
+.tiptap-editor .ProseMirror strong { @apply font-bold; }
+.tiptap-editor .ProseMirror em { @apply italic; }
+.tiptap-editor .ProseMirror code { @apply bg-muted px-1 rounded font-mono text-sm; }
+.tiptap-editor .ProseMirror pre { @apply bg-muted p-3 rounded font-mono text-sm overflow-x-auto; }
+.tiptap-editor .ProseMirror a { @apply text-primary underline; }
+
+/* Rich text rendered content */
+.rich-text h1 { @apply text-2xl font-bold mb-2 mt-4; }
+.rich-text h2 { @apply text-xl font-semibold mb-2 mt-3; }
+.rich-text h3 { @apply text-lg font-medium mb-1 mt-2; }
+.rich-text ul { @apply list-disc pl-5 mb-2; }
+.rich-text ol { @apply list-decimal pl-5 mb-2; }
+.rich-text blockquote { @apply border-l-4 border-border pl-4 italic my-2; }
+.rich-text p { @apply mb-2; }
+.rich-text strong { @apply font-bold; }
+.rich-text em { @apply italic; }
+.rich-text code { @apply bg-muted px-1 rounded font-mono text-sm; }
+.rich-text a { @apply text-primary underline; }
