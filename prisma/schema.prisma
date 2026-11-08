@@ -1,0 +1,213 @@
+// Postgres schema. Table and column names are kept snake_case (as in the original SQLite schema) because the API
+// returns rows as-is and the frontend reads these names (business_id, created_at, ...).
+//
+// Change the schema here, then `npm run db:migrate -- --name <change>` to create a migration. Production applies
+// pending migrations when the container boots (bin/docker-entrypoint).
+//
+// Date-only columns (@db.Date) are returned to the API as 'YYYY-MM-DD' strings by the client extension in
+// server/db/prisma.ts.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../server/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            Int      @id @default(autoincrement())
+  username      String   @unique
+  password_hash String
+  email         String?
+  role          String   @default("user")
+  timezone      String?  @default("UTC")
+  created_at    DateTime @default(now()) @db.Timestamptz(3)
+
+  assigned_businesses Business[]    @relation("BusinessAssignee")
+  interactions        Interaction[]
+  completed_steps     NextStep[]    @relation("StepCompletedBy")
+  created_steps       NextStep[]    @relation("StepCreatedBy")
+
+  @@map("users")
+}
+
+model Business {
+  id                   Int       @id @default(autoincrement())
+  name                 String
+  category             String
+  stage                String    @default("initial_interest")
+  description          String?
+  listing_url          String?
+  asking_price         Float?
+  revenue_multiple     Float?
+  trailing_12m_revenue Float?
+  trailing_12m_profit  Float?
+  platform             String?
+  date_listed          DateTime? @db.Date
+  date_added           DateTime  @default(now()) @db.Timestamptz(3)
+  last_updated         DateTime  @default(now()) @db.Timestamptz(3)
+  assigned_to          Int?
+  follow_up_date       DateTime? @db.Date
+  follow_up_note       String?
+  is_archived          Boolean   @default(false)
+
+  assignee        User?           @relation("BusinessAssignee", fields: [assigned_to], references: [id], onDelete: SetNull)
+  business_case   BusinessCase?
+  growth_plan     GrowthPlan?
+  working_capital WorkingCapital?
+  valuation       Valuation?
+  risks           RiskItem[]
+  interactions    Interaction[]
+  attachments     Attachment[]
+  next_steps      NextStep[]
+
+  @@index([is_archived, stage])
+  @@map("businesses")
+}
+
+model BusinessCase {
+  id                    Int      @id @default(autoincrement())
+  business_id           Int      @unique
+  strategic_rationale   String?
+  target_market         String?
+  competitive_advantage String?
+  key_risks             String?
+  assumptions           String?
+  updated_at            DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@map("business_case")
+}
+
+model GrowthPlan {
+  id                 Int      @id @default(autoincrement())
+  business_id        Int      @unique
+  year1_goals        String?
+  year2_goals        String?
+  marketing_strategy String?
+  product_roadmap    String?
+  team_requirements  String?
+  updated_at         DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@map("growth_plan")
+}
+
+model WorkingCapital {
+  id                       Int      @id @default(autoincrement())
+  business_id              Int      @unique
+  acquisition_cost         Float?
+  legal_fees               Float?
+  transition_costs         Float?
+  initial_marketing_budget Float?
+  tech_infrastructure      Float?
+  working_capital_buffer   Float?
+  other_costs              Float?
+  other_costs_notes        String?
+  total_estimated          Float?
+  funding_source           String?
+  updated_at               DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@map("working_capital")
+}
+
+model RiskItem {
+  id            Int      @id @default(autoincrement())
+  business_id   Int
+  category      String?
+  description   String
+  is_resolved   Boolean  @default(false)
+  resolved_note String?
+  created_at    DateTime @default(now()) @db.Timestamptz(3)
+
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@index([business_id])
+  @@map("risk_checklist")
+}
+
+model Valuation {
+  id                   Int      @id @default(autoincrement())
+  business_id          Int      @unique
+  valuation_method     String?
+  estimated_value_low  Float?
+  estimated_value_mid  Float?
+  estimated_value_high Float?
+  initial_offer        Float?
+  max_offer            Float?
+  final_offer_made     Float?
+  offer_notes          String?
+  updated_at           DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  business Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@map("valuation")
+}
+
+model Interaction {
+  id          Int      @id @default(autoincrement())
+  business_id Int
+  user_id     Int?
+  type        String?
+  title       String?
+  body        String?
+  occurred_at DateTime @default(now()) @db.Timestamptz(3)
+  created_at  DateTime @default(now()) @db.Timestamptz(3)
+
+  business    Business     @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  user        User?        @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  attachments Attachment[]
+
+  @@index([business_id, occurred_at])
+  @@map("interactions")
+}
+
+model Attachment {
+  id             Int      @id @default(autoincrement())
+  interaction_id Int?
+  business_id    Int
+  filename       String   @unique
+  original_name  String
+  mime_type      String?
+  file_size      Int?
+  uploaded_at    DateTime @default(now()) @db.Timestamptz(3)
+
+  interaction Interaction? @relation(fields: [interaction_id], references: [id], onDelete: Cascade)
+  business    Business     @relation(fields: [business_id], references: [id], onDelete: Cascade)
+
+  @@index([interaction_id])
+  @@map("attachments")
+}
+
+model NextStep {
+  id              Int       @id @default(autoincrement())
+  business_id     Int
+  title           String
+  notes           String?
+  due_date        DateTime  @db.Date
+  is_primary      Boolean   @default(true)
+  parent_id       Int?
+  status          String    @default("pending")
+  completion_note String?
+  completed_at    DateTime? @db.Timestamptz(3)
+  completed_by    Int?
+  created_by      Int?
+  created_at      DateTime  @default(now()) @db.Timestamptz(3)
+  updated_at      DateTime  @default(now()) @db.Timestamptz(3)
+
+  business          Business   @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  parent            NextStep?  @relation("Subtasks", fields: [parent_id], references: [id], onDelete: Cascade)
+  subtasks          NextStep[] @relation("Subtasks")
+  completed_by_user User?      @relation("StepCompletedBy", fields: [completed_by], references: [id], onDelete: SetNull)
+  created_by_user   User?      @relation("StepCreatedBy", fields: [created_by], references: [id], onDelete: SetNull)
+
+  @@index([business_id, is_primary, status])
+  @@index([parent_id])
+  @@map("next_steps")
+}

@@ -1,5 +1,5 @@
 import { LoginSchema } from '~/shared/schemas'
-import { getDb } from '../../db/database'
+import { prisma } from '../../db/prisma'
 import { burnPasswordCheck, hashUserPassword, needsRehash, verifyUserPassword } from '../../utils/auth'
 import { assertLoginAllowed, recordLoginFailure, recordLoginSuccess } from '../../utils/loginRateLimit'
 
@@ -14,10 +14,7 @@ export default defineEventHandler(async (event) => {
   const { username, password } = parsed.data
   assertLoginAllowed(event, username)
 
-  const db = getDb()
-  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as {
-    id: number, username: string, password_hash: string, email: string, role: string
-  } | undefined
+  const user = await prisma.user.findUnique({ where: { username } })
 
   // Same work and the same answer whether or not the username exists
   const valid = user ? await verifyUserPassword(password, user.password_hash) : (await burnPasswordCheck(password), false)
@@ -30,7 +27,7 @@ export default defineEventHandler(async (event) => {
 
   // Upgrade legacy SHA-256 (or outdated scrypt) hashes now that we have the plain password
   if (needsRehash(user.password_hash)) {
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(await hashUserPassword(password), user.id)
+    await prisma.user.update({ where: { id: user.id }, data: { password_hash: await hashUserPassword(password) } })
   }
 
   await setUserSession(event, {

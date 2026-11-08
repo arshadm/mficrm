@@ -1,23 +1,25 @@
-import { getDb } from '../../../../db/database'
+import { idParam, prisma } from '../../../../db/prisma'
 import type { TDocumentDefinitions } from 'pdfmake/interfaces'
 
 export default defineEventHandler(async (event) => {
   const session = await getUserSession(event)
   if (!session?.user) throw createError({ statusCode: 401, message: 'Unauthorized' })
 
-  const id = getRouterParam(event, 'id')
-  const db = getDb()
+  const id = idParam(event, 'id')
 
-  const business = db.prepare('SELECT * FROM businesses WHERE id = ?').get(id) as Record<string, unknown> | undefined
+  const business = await prisma.business.findUnique({ where: { id } }) as Record<string, unknown> | null
   if (!business) throw createError({ statusCode: 404, message: 'Not found' })
 
-  const activeStep = db.prepare(
-    `SELECT title, due_date FROM next_steps WHERE business_id = ? AND is_primary = 1 AND status = 'pending' ORDER BY created_at DESC LIMIT 1`
-  ).get(id) as { title: string, due_date: string } | undefined
-
-  const valuation = db.prepare('SELECT * FROM valuation WHERE business_id = ?').get(id) as Record<string, unknown> | null
-  const workingCapital = db.prepare('SELECT * FROM working_capital WHERE business_id = ?').get(id) as Record<string, unknown> | null
-  const risks = db.prepare('SELECT * FROM risk_checklist WHERE business_id = ?').all(id) as Array<Record<string, unknown>>
+  const [activeStep, valuation, workingCapital, risks] = await Promise.all([
+    prisma.nextStep.findFirst({
+      where: { business_id: id, is_primary: true, status: 'pending' },
+      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      select: { title: true, due_date: true },
+    }),
+    prisma.valuation.findUnique({ where: { business_id: id } }) as Promise<Record<string, unknown> | null>,
+    prisma.workingCapital.findUnique({ where: { business_id: id } }) as Promise<Record<string, unknown> | null>,
+    prisma.riskItem.findMany({ where: { business_id: id }, orderBy: { id: 'asc' } }) as Promise<Array<Record<string, unknown>>>,
+  ])
 
   const PdfPrinter = (await import('pdfmake')).default
   const fonts = {

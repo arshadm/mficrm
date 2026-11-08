@@ -64,7 +64,7 @@ export function assertLoginAllowed(event: H3Event, username: string) {
   const resetAt = Math.max(0, ...locked.filter(([b, max]) => b && b.failures >= max).map(([b]) => b!.resetAt))
   if (resetAt) {
     const retryAfter = Math.ceil((resetAt - now) / 1000)
-    setResponseHeader(event, 'Retry-After', String(retryAfter))
+    setResponseHeader(event, 'Retry-After', retryAfter)
     throw createError({ statusCode: 429, message: 'Too many failed login attempts. Try again later.' })
   }
 }

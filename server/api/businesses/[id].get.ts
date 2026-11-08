@@ -1,19 +1,14 @@
-import { getDb } from '../../db/database'
+import { idParam, prisma } from '../../db/prisma'
+import { withAssignee } from '../../utils/rows'
 
 export default defineEventHandler(async (event) => {
   const session = await getUserSession(event)
   if (!session?.user) throw createError({ statusCode: 401, message: 'Unauthorized' })
 
-  const id = getRouterParam(event, 'id')
-  const db = getDb()
-
-  const business = db.prepare(`
-    SELECT b.*, u.username as assigned_username, u.email as assigned_email
-    FROM businesses b
-    LEFT JOIN users u ON b.assigned_to = u.id
-    WHERE b.id = ?
-  `).get(id)
-
+  const business = await prisma.business.findUnique({
+    where: { id: idParam(event, 'id') },
+    include: { assignee: { select: { username: true, email: true } } },
+  })
   if (!business) throw createError({ statusCode: 404, message: 'Business not found' })
-  return business
+  return withAssignee(business)
 })

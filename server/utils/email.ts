@@ -1,5 +1,5 @@
 import nodemailer from 'nodemailer'
-import { getDb } from '../db/database'
+import { prisma } from '../db/prisma'
 
 function getTransporter() {
   return nodemailer.createTransport({
@@ -30,29 +30,27 @@ interface NextStepDue {
 }
 
 export async function sendFollowUpReminders() {
-  const db = getDb()
   const today = new Date().toISOString().split('T')[0]
+  const todayDate = new Date(`${today}T00:00:00Z`)
   const appUrl = process.env.APP_URL || 'http://localhost:3000'
 
-  // Query follow-ups
-  const followUps = db.prepare(`
-    SELECT b.id, b.name, b.stage, b.follow_up_note, u.email as user_email, u.username
-    FROM businesses b
-    LEFT JOIN users u ON b.assigned_to = u.id
-    WHERE b.follow_up_date <= ? AND b.is_archived = 0
-  `).all(today) as FollowUp[]
+  // Businesses whose follow-up date has arrived
+  const followUps: FollowUp[] = (await prisma.business.findMany({
+    where: { follow_up_date: { lte: todayDate }, is_archived: false },
+    select: { id: true, name: true, stage: true, follow_up_note: true, assignee: { select: { email: true, username: true } } },
+  })).map(({ assignee, ...b }) => ({ ...b, user_email: assignee?.email ?? null, username: assignee?.username ?? null }))
 
-  // Query next steps due today
-  const nextStepsDue = db.prepare(`
-    SELECT b.id as business_id, b.name as business_name,
-           ns.title as step_title, ns.notes as step_notes,
-           u.email as user_email
-    FROM next_steps ns
-    JOIN businesses b ON ns.business_id = b.id
-    LEFT JOIN users u ON b.assigned_to = u.id
-    WHERE ns.is_primary = 1 AND ns.status = 'pending'
-      AND ns.due_date = ? AND b.is_archived = 0
-  `).all(today) as NextStepDue[]
+  // Primary next steps due today
+  const nextStepsDue: NextStepDue[] = (await prisma.nextStep.findMany({
+    where: { is_primary: true, status: 'pending', due_date: todayDate, business: { is_archived: false } },
+    select: { title: true, notes: true, business: { select: { id: true, name: true, assignee: { select: { email: true } } } } },
+  })).map(s => ({
+    business_id: s.business.id,
+    business_name: s.business.name,
+    step_title: s.title,
+    step_notes: s.notes,
+    user_email: s.business.assignee?.email ?? null,
+  }))
 
   if (!followUps.length && !nextStepsDue.length) return
 

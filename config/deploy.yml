@@ -2,7 +2,7 @@
 # Cloudflare in front, HTTPS on both legs (Cloudflare SSL mode "Full (strict)"), secrets from Bitwarden
 # (.kamal/secrets). See docs/deploy.md.
 #
-#   kamal setup     first deploy: installs Docker, starts the proxy, deploys the app
+#   kamal setup     first deploy: installs Docker, starts the proxy and the db accessory, deploys the app
 #   kamal deploy    every later release (migrations run when the container boots)
 service: mficrm
 
@@ -33,19 +33,20 @@ proxy:
   buffering:
     max_request_body: 26_214_400
 
+# Migrations run before the web server starts, so allow longer than the 30s default
+deploy_timeout: 120
 # Keep the previous release's /_nuxt files so open pages don't 404 mid-deploy
 asset_path: /app/.output/public
 
-# SQLite database and uploads. A named Docker volume on the host (`docker volume inspect mficrm_data`), mounted at
-# /data. DATABASE_URL and UPLOAD_DIR point into it (Dockerfile). Without it every deploy would start empty.
-# SQLite allows a single writer and the reminder cron runs in-process, so run exactly one container.
+# Uploaded files. A named Docker volume on the host (`docker volume inspect mficrm_data`), mounted at /data;
+# UPLOAD_DIR points into it. Without it every deploy would lose the uploads. (The database is the db accessory.)
+# The reminder cron runs in-process, so run exactly one app container or reminders go out twice.
 volumes:
   - mficrm_data:/data
 
 env:
   clear:
     APP_URL: https://crm.mfitrading.co.uk
-    DATABASE_URL: /data/db/crm.db
     UPLOAD_DIR: /data/uploads
     ADMIN_USERNAME: admin
     # Login rate limits read the visitor IP from Cloudflare (server/utils/loginRateLimit.ts). Safe only while the
@@ -56,15 +57,31 @@ env:
     SMTP_PORT: "587"
     SMTP_FROM: AcquireDesk <crm@mfitrading.co.uk>
   secret:
+    - DATABASE_URL
     - NUXT_SESSION_PASSWORD
     - ADMIN_PASSWORD
     - SMTP_USER
     - SMTP_PASS
 
+accessories:
+  db:
+    image: postgres:16-alpine
+    host: 46.62.237.88
+    env:
+      clear:
+        POSTGRES_USER: mficrm
+        POSTGRES_DB: mficrm
+      secret:
+        - POSTGRES_PASSWORD
+    # Persisted on the host in ~/mficrm-db/data. Reachable only on Kamal's private Docker network as mficrm-db.
+    directories:
+      - data:/var/lib/postgresql/data
+
 aliases:
   logs: app logs -f
   shell: app exec --interactive --reuse "bash"
-  sqlite: app exec --interactive --reuse "sqlite3 /data/db/crm.db"
+  migrate: app exec --reuse "prisma migrate deploy"
+  psql: accessory exec db --interactive --reuse "psql -U mficrm mficrm"
 
 registry:
   server: registry.hub.docker.com

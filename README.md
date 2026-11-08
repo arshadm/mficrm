@@ -6,7 +6,7 @@ A full-featured CRM for tracking business acquisition opportunities from initial
 
 - **Frontend**: Nuxt 4 (Vue 3 Composition API, TypeScript)
 - **Backend**: Nuxt server routes (h3/Nitro)
-- **Database**: SQLite3 via better-sqlite3
+- **Database**: PostgreSQL 16 via Prisma
 - **Auth**: nuxt-auth-utils (session-based)
 - **Rich Text**: Tiptap
 - **Email**: Nodemailer
@@ -32,7 +32,7 @@ cp .env.example .env
 Edit `.env`:
 
 ```env
-DATABASE_URL=./db/crm.db
+DATABASE_URL=postgresql://mficrm:mficrm@localhost:5433/mficrm
 NUXT_SESSION_SECRET=your_random_32_character_string_here
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=your_secure_password
@@ -44,15 +44,24 @@ SMTP_FROM=crm@example.com
 UPLOAD_DIR=./uploads
 ```
 
-### 3. Run dev server
+### 3. Start Postgres and apply migrations
 
-Migrations and seeding run automatically on startup.
+Needs Docker. Postgres runs on host port 5433.
+
+```bash
+npm run db:up        # start Postgres (docker/docker-compose.yml)
+npm run db:migrate   # apply migrations
+```
+
+### 4. Run dev server
+
+The admin user and sample data are seeded on startup.
 
 ```bash
 npm run dev
 ```
 
-### 4. Login
+### 5. Login
 
 Navigate to `http://localhost:3000` and log in:
 - Username: `admin` (or your `ADMIN_USERNAME`)
@@ -89,7 +98,8 @@ mficrm/
 ├── shared/
 │   ├── schemas/                  # Zod validation schemas
 │   └── types/                    # TypeScript types
-├── db/                           # SQLite file (auto-created)
+├── prisma/                       # Prisma schema and migrations
+├── docker/                       # Local Postgres (docker compose)
 ├── uploads/                      # File uploads (auto-created)
 └── .env.example
 ```

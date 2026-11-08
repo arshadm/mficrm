@@ -1,14 +1,10 @@
-import { getDb } from '../../db/database'
+import { idParam, prisma } from '../../db/prisma'
 
 export default defineEventHandler(async (event) => {
   const session = await getUserSession(event)
   if (!session?.user) throw createError({ statusCode: 401, message: 'Unauthorized' })
 
-  const stepId = getRouterParam(event, 'stepId')
-  const db = getDb()
-  const now = new Date().toISOString()
-
   // Soft delete: set status = 'skipped'
-  db.prepare(`UPDATE next_steps SET status = 'skipped', updated_at = ? WHERE id = ?`).run(now, stepId)
+  await prisma.nextStep.updateMany({ where: { id: idParam(event, 'stepId') }, data: { status: 'skipped', updated_at: new Date() } })
   return { success: true }
 })

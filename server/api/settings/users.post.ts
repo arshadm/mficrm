@@ -1,6 +1,6 @@
-import { getDb } from '../../db/database'
+import { prisma } from '../../db/prisma'
 import { CreateUserSchema } from '~/shared/schemas'
-import { hashUserPassword as hashPassword } from "../../utils/auth"
+import { hashUserPassword as hashPassword } from '../../utils/auth'
 
 export default defineEventHandler(async (event) => {
   const session = await getUserSession(event)
@@ -11,16 +11,15 @@ export default defineEventHandler(async (event) => {
   const parsed = CreateUserSchema.safeParse(body)
   if (!parsed.success) throw createError({ statusCode: 400, message: 'Validation error', data: parsed.error.errors })
 
-  const db = getDb()
   const hash = await hashPassword(parsed.data.password)
-
   try {
-    const result = db.prepare(
-      'INSERT INTO users (username, password_hash, email, role) VALUES (?, ?, ?, ?)'
-    ).run(parsed.data.username, hash, parsed.data.email ?? null, parsed.data.role)
-
-    return db.prepare('SELECT id, username, email, role, created_at FROM users WHERE id = ?').get(result.lastInsertRowid)
-  } catch {
-    throw createError({ statusCode: 409, message: 'Username already exists' })
+    return await prisma.user.create({
+      data: { username: parsed.data.username, password_hash: hash, email: parsed.data.email ?? null, role: parsed.data.role },
+      select: { id: true, username: true, email: true, role: true, created_at: true },
+    })
+  } catch (err) {
+    // P2002: unique constraint (username)
+    if ((err as { code?: string })?.code === 'P2002') throw createError({ statusCode: 409, message: 'Username already exists' })
+    throw err
   }
 })

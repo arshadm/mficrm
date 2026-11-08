@@ -1,4 +1,5 @@
-import { getDb } from '../../../db/database'
+import { prisma } from '../../../db/prisma'
+import type { Prisma } from '../../../generated/prisma/client'
 import Papa from 'papaparse'
 
 export default defineEventHandler(async (event) => {
@@ -6,29 +7,35 @@ export default defineEventHandler(async (event) => {
   if (!session?.user) throw createError({ statusCode: 401, message: 'Unauthorized' })
 
   const query = getQuery(event)
-  const db = getDb()
+  const where: Prisma.BusinessWhereInput = { is_archived: false }
+  if (query.stage) where.stage = String(query.stage)
+  if (query.category) where.category = String(query.category)
 
-  let sql = `
-    SELECT b.id, b.name, b.category, b.stage, b.platform, b.asking_price,
-    b.trailing_12m_revenue, b.trailing_12m_profit, b.follow_up_date,
-    b.date_added, b.last_updated, u.username as assigned_to,
-    ns.title as next_step_title, ns.due_date as next_step_due_date
-    FROM businesses b
-    LEFT JOIN users u ON b.assigned_to = u.id
-    LEFT JOIN next_steps ns ON ns.id = (
-      SELECT id FROM next_steps
-      WHERE business_id = b.id AND is_primary = 1 AND status = 'pending'
-      ORDER BY created_at DESC LIMIT 1
-    )
-    WHERE b.is_archived = 0
-  `
-  const params: (string | number)[] = []
+  const businesses = await prisma.business.findMany({
+    where,
+    orderBy: { id: 'asc' },
+    select: {
+      id: true, name: true, category: true, stage: true, platform: true, asking_price: true,
+      trailing_12m_revenue: true, trailing_12m_profit: true, follow_up_date: true,
+      date_added: true, last_updated: true,
+      assignee: { select: { username: true } },
+      // Latest pending primary step
+      next_steps: {
+        where: { is_primary: true, status: 'pending' },
+        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+        take: 1,
+        select: { title: true, due_date: true },
+      },
+    },
+  })
 
-  if (query.stage) { sql += ' AND b.stage = ?'; params.push(query.stage as string) }
-  if (query.category) { sql += ' AND b.category = ?'; params.push(query.category as string) }
-
-  const businesses = db.prepare(sql).all(...params)
-  const csv = Papa.unparse(businesses as object[])
+  const rows = businesses.map(({ assignee, next_steps, ...b }) => ({
+    ...b,
+    assigned_to: assignee?.username ?? null,
+    next_step_title: next_steps[0]?.title ?? null,
+    next_step_due_date: next_steps[0]?.due_date ?? null,
+  }))
+  const csv = Papa.unparse(rows)
 
   setHeader(event, 'Content-Type', 'text/csv')
   setHeader(event, 'Content-Disposition', 'attachment; filename="businesses.csv"')

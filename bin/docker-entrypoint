@@ -1,13 +1,17 @@
 #!/bin/sh
-# Container entrypoint (Dockerfile). `web` makes sure the data directories exist on the volume, then starts Nuxt.
-# The server runs migrations and seeding itself on boot (server/plugins/init.ts). Anything else runs as given,
-# e.g. `kamal app exec 'sqlite3 /data/db/crm.db .tables'`.
+# Container entrypoint (Dockerfile). `web` applies pending Prisma migrations, makes sure the upload directory exists
+# on the volume, then starts Nuxt. The server seeds the admin user on boot (server/plugins/init.ts).
+# Anything else runs as given, e.g. `kamal app exec 'prisma migrate status'`.
 set -e
 cd /app
 
 case "$1" in
   web)
-    mkdir -p "$(dirname "${DATABASE_URL:-/data/db/crm.db}")" "${UPLOAD_DIR:-/data/uploads}"
+    if [ "${MIGRATE_ON_BOOT:-on}" = "on" ]; then
+      echo "Applying database migrations…"
+      node_modules/.bin/prisma migrate deploy
+    fi
+    mkdir -p "${UPLOAD_DIR:-/data/uploads}"
     exec node .output/server/index.mjs
     ;;
   *)

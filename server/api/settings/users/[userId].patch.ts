@@ -1,4 +1,4 @@
-import { getDb } from '../../../db/database'
+import { idParam, orNotFound, prisma } from '../../../db/prisma'
 import { hashUserPassword as hashPassword } from '../../../utils/auth'
 import { z } from 'zod'
 
@@ -7,7 +7,7 @@ export default defineEventHandler(async (event) => {
   if (!session?.user) throw createError({ statusCode: 401, message: 'Unauthorized' })
   if ((session.user as { role: string }).role !== 'admin') throw createError({ statusCode: 403, message: 'Forbidden' })
 
-  const userId = getRouterParam(event, 'userId')
+  const id = idParam(event, 'userId')
   const body = await readBody(event)
 
   const Schema = z.object({
@@ -19,23 +19,14 @@ export default defineEventHandler(async (event) => {
   const parsed = Schema.safeParse(body)
   if (!parsed.success) throw createError({ statusCode: 400, message: 'Validation error' })
 
-  const db = getDb()
   const d = parsed.data
-  const fields: string[] = []
-  const values: (string | null)[] = []
-
-  if (d.email !== undefined) { fields.push('email = ?'); values.push(d.email) }
-  if (d.role !== undefined) { fields.push('role = ?'); values.push(d.role) }
-  if (d.password) {
-    const hash = await hashPassword(d.password)
-    fields.push('password_hash = ?')
-    values.push(hash)
-  }
-
-  if (!fields.length) return db.prepare('SELECT id, username, email, role FROM users WHERE id = ?').get(userId)
-
-  values.push(userId as string)
-  db.prepare(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`).run(...values)
-
-  return db.prepare('SELECT id, username, email, role, created_at FROM users WHERE id = ?').get(userId)
+  return orNotFound(prisma.user.update({
+    where: { id },
+    data: {
+      email: d.email,
+      role: d.role,
+      password_hash: d.password ? await hashPassword(d.password) : undefined,
+    },
+    select: { id: true, username: true, email: true, role: true, created_at: true },
+  }), 'User not found')
 })

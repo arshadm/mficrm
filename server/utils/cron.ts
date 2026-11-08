@@ -1,5 +1,4 @@
 import cron from 'node-cron'
-import { getDb } from '../db/database'
 import { sendFollowUpReminders } from './email'
 
 export function startCronJobs() {

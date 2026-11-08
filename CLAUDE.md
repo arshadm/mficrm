@@ -4,13 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-AcquireDesk is a CRM for tracking business acquisition opportunities (Nuxt 4 full-stack app, SQLite via better-sqlite3). Setup, env vars and feature overview are in `README.md`.
+AcquireDesk is a CRM for tracking business acquisition opportunities (Nuxt 4 full-stack app, PostgreSQL via Prisma 7). Setup, env vars and feature overview are in `README.md`.
 
 ## Commands
 
 ```bash
-npm install            # also runs `nuxt prepare` (regenerates .nuxt/ types)
+npm install            # also runs `prisma generate` and `nuxt prepare`
+npm run db:up          # local Postgres 16 in Docker (host port 5433, docker/docker-compose.yml)
+npm run db:migrate     # apply migrations; after a schema change: npm run db:migrate -- --name <change>
 npm run dev            # dev server on http://localhost:3000 (default login admin / changeme)
+npm run db:studio      # browse the database
 npm run build          # production build → .output/
 node .output/server/index.mjs   # run production build
 ```
@@ -19,19 +22,29 @@ There is no test suite, linter script, or typecheck script configured. `typescri
 
 ## Architecture
 
-**Startup.** `server/plugins/init.ts` (Nitro plugin) runs on every server start: `runMigrations()` → `seedDatabase()` → `startCronJobs()`. There is no migration framework:
-- `server/db/migrate.ts` is a single `CREATE TABLE IF NOT EXISTS` block. Schema changes to existing tables are added as `try { db.exec('ALTER TABLE ... ADD COLUMN ...') } catch {}` lines at the end of that function.
-- `server/db/seed.ts` creates the admin user from `ADMIN_USERNAME`/`ADMIN_PASSWORD` if missing, and inserts sample businesses only when the `businesses` table is empty.
-- To reset data, delete `db/crm.db*` and restart.
+**Schema and migrations.** The schema is `prisma/schema.prisma`, and migrations live in `prisma/migrations/`. Change the schema, then run `npm run db:migrate -- --name <change>`. Production applies pending migrations in `bin/docker-entrypoint` before the server starts, so migrations must be backwards compatible with the release still running. The generated client goes to `server/generated/prisma` (gitignored, created on `npm install`).
 
-**Database access.** `getDb()` in `server/db/database.ts` returns a lazily created singleton (WAL mode, foreign keys ON). API handlers import it by relative path (e.g. `../../../db/database`) and write raw synchronous SQL with `db.prepare(...).run/get/all`. No ORM. Timestamps are written as `new Date().toISOString()`; booleans are stored as `0/1`.
+**Startup.** `server/plugins/init.ts` (Nitro plugin) runs `seedDatabase()` then `startCronJobs()`. `server/db/seed.ts` creates the admin user from `ADMIN_USERNAME`/`ADMIN_PASSWORD` if missing, and inserts sample businesses only when the `businesses` table is empty. To reset local data, run `npm run db:reset`.
+
+**Database access.** Import `prisma` from `server/db/prisma.ts` by relative path. That file also provides:
+- `idParam(event, name)`: parses a numeric route param, 404 otherwise.
+- `orNotFound(write)`: turns Prisma's "missing row" and "missing foreign key" errors (P2025/P2003) into a 404.
+- `toDate()` / `today()`: for date-only columns.
+
+Things to preserve:
+- **Names.** Models keep the original snake_case table and column names, because the API returns rows as-is and the frontend reads those names.
+- **Joined columns.** Joins are flattened into the old aliased shape (`assigned_username`, `username`/`user_email`, `business_name`, `step_id`…) by helpers in `server/utils/rows.ts` and `server/utils/dueSteps.ts`.
+- **Date-only columns** (`date_listed`, `follow_up_date`, `due_date`) are `@db.Date`. A client extension returns them as `'YYYY-MM-DD'` strings, which date inputs and due-date logic rely on. Write them with `toDate()`.
+- **Timestamps** are `timestamptz` and serialise as ISO strings.
+- **Search** must be case-insensitive (`mode: 'insensitive'`); SQLite's `LIKE` was.
+- **Deleting a user** sets their references to NULL (`onDelete: SetNull`). Deleting a business cascades to everything under it.
 
 **Data model.** `businesses` is the central entity. Per-business one-to-one tables (`business_case`, `growth_plan`, `working_capital`, `valuation`) have a `UNIQUE business_id`. Their GET/PATCH routes back the tabs on `app/pages/businesses/[id].vue`. One-to-many: `risk_checklist`, `interactions`, `attachments`, and `next_steps`, which uses `parent_id` for subtasks and `status` of `pending`/`done`/`skipped`. Everything cascades on business delete.
 
 **API routes.** These follow Nitro file conventions under `server/api/` (`[id].patch.ts`, `[id]/risks.post.ts`, and so on). Typical handler shape:
 1. `getUserSession(event)` and throw 401 if there's no user. Each handler repeats this even though `server/middleware/auth.ts` already guards `/api/*` except `/api/auth/*`.
 2. Validate the body with a Zod schema via `safeParse`, then throw 400 on failure.
-3. Run raw SQL and return the row.
+3. Query with Prisma and return the row, flattened into the expected shape where relations are included.
 
 Admin-only routes (`server/api/settings/users*`) check `session.user.role === 'admin'`.
 
@@ -53,7 +66,7 @@ Side effect to preserve: `PATCH /api/businesses/:id` inserts a `stage_change` ro
 
 **Config.** Server code reads environment variables directly through `process.env` (`DATABASE_URL`, `UPLOAD_DIR`, `ADMIN_*`, `SMTP_*`, `APP_URL`). The `runtimeConfig` values in `nuxt.config.ts` are not used. Session encryption uses `NUXT_SESSION_PASSWORD` (nuxt-auth-utils), not `NUXT_SESSION_SECRET`.
 
-**Deployment.** Kamal 2 (`config/deploy.yml`, `.kamal/secrets` from Bitwarden, `Dockerfile`, `bin/docker-entrypoint`); see `docs/deploy.md`. It runs a single container, and the SQLite DB and uploads live on the `mficrm_data` volume at `/data`. The runtime image contains only `.output`: Nitro bundles server dependencies, including better-sqlite3's native binding.
+**Deployment.** Kamal 2 (`config/deploy.yml`, `.kamal/secrets` from Bitwarden, `Dockerfile`, `bin/docker-entrypoint`); see `docs/deploy.md`. Postgres 16 runs as the `db` Kamal accessory (`mficrm-db`), and `DATABASE_URL` is built in `.kamal/secrets`. There is a single app container; uploads live on the `mficrm_data` volume at `/data`. The runtime image keeps the full `/app`, including `node_modules`, because the entrypoint runs the Prisma CLI.
 
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:1105d646 -->
