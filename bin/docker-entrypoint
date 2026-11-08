@@ -1,0 +1,16 @@
+#!/bin/sh
+# Container entrypoint (Dockerfile). `web` makes sure the data directories exist on the volume, then starts Nuxt.
+# The server runs migrations and seeding itself on boot (server/plugins/init.ts). Anything else runs as given,
+# e.g. `kamal app exec 'sqlite3 /data/db/crm.db .tables'`.
+set -e
+cd /app
+
+case "$1" in
+  web)
+    mkdir -p "$(dirname "${DATABASE_URL:-/data/db/crm.db}")" "${UPLOAD_DIR:-/data/uploads}"
+    exec node .output/server/index.mjs
+    ;;
+  *)
+    exec "$@"
+    ;;
+esac

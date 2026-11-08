@@ -1,0 +1,77 @@
+# Kamal 2 deployment (https://kamal-deploy.org), set up the same way as stepwise: one host behind kamal-proxy,
+# Cloudflare in front, HTTPS on both legs (Cloudflare SSL mode "Full (strict)"), secrets from Bitwarden
+# (.kamal/secrets). See docs/deploy.md.
+#
+#   kamal setup     first deploy: installs Docker, starts the proxy, deploys the app
+#   kamal deploy    every later release (migrations run when the container boots)
+service: mficrm
+
+image: artemissoft1/mficrm
+
+servers:
+  web:
+    hosts:
+      # TODO: confirm the host before the first `kamal setup` (this is the spinorml/stepwise host, which already
+      # runs kamal-proxy).
+      - 46.62.237.88
+    cmd: web
+
+proxy:
+  ssl:
+    certificate_pem: ORIGIN_CERTIFICATE_PEM
+    private_key_pem: ORIGIN_PRIVATE_KEY_PEM
+  hosts:
+    # TODO: the real domain. Keep APP_URL below in step.
+    - crm.example.com
+  app_port: 3000
+  forward_headers: true
+  healthcheck:
+    path: /api/health
+    interval: 3
+    timeout: 5
+  # Attachments are capped at 20 MB each by the app
+  buffering:
+    max_request_body: 26_214_400
+
+# Keep the previous release's /_nuxt files so open pages don't 404 mid-deploy
+asset_path: /app/.output/public
+
+# SQLite database and uploads. A named Docker volume on the host (`docker volume inspect mficrm_data`), mounted at
+# /data. DATABASE_URL and UPLOAD_DIR point into it (Dockerfile). Without it every deploy would start empty.
+# SQLite allows a single writer and the reminder cron runs in-process, so run exactly one container.
+volumes:
+  - mficrm_data:/data
+
+env:
+  clear:
+    APP_URL: https://crm.mfitrading.co.uk
+    DATABASE_URL: /data/db/crm.db
+    UPLOAD_DIR: /data/uploads
+    ADMIN_USERNAME: admin
+    # TODO: SMTP server and sender for the 08:00 follow-up reminder emails
+    SMTP_HOST: smtp.example.com
+    SMTP_PORT: "587"
+    SMTP_FROM: AcquireDesk <crm@mfitrading.co.uk>
+  secret:
+    - NUXT_SESSION_PASSWORD
+    - ADMIN_PASSWORD
+    - SMTP_USER
+    - SMTP_PASS
+
+aliases:
+  logs: app logs -f
+  shell: app exec --interactive --reuse "bash"
+  sqlite: app exec --interactive --reuse "sqlite3 /data/db/crm.db"
+
+registry:
+  server: registry.hub.docker.com
+  username: artemissoft1
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+builder:
+  arch: amd64
+
+ssh:
+  user: kamal
+

@@ -3,7 +3,7 @@ node_modules/
 .output/
 dist/
 db/crm.db
-uploads/
+/uploads/
 .env
 *.local
 

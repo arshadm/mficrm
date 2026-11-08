@@ -4,6 +4,7 @@ export default defineEventHandler(async (event) => {
   // Allow public paths
   if (
     path.startsWith('/api/auth/') ||
+    path === '/api/health' ||
     path.startsWith('/_nuxt/') ||
     path.startsWith('/__nuxt_devtools__') ||
     path === '/login' ||

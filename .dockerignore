@@ -1,0 +1,26 @@
+# Dependencies and build output (rebuilt inside the image)
+node_modules
+.output
+.nuxt
+.nitro
+.cache
+.data
+
+# Local data (production data lives on the /data volume)
+db
+uploads
+
+# Secrets and local config
+.env
+.env.*
+.kamal
+
+# Not needed in the image
+.git
+.github
+.beads
+.dolt
+.claude
+docs
+*.log
+.DS_Store

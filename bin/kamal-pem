@@ -1,0 +1,40 @@
+#!/usr/bin/env ruby
+# Turns a certificate or private key stored in a one-line Bitwarden field back into a proper PEM, for .kamal/secrets.
+# Accepts either the PEM pasted as-is (Bitwarden turns its line breaks into spaces or drops them) or the PEM
+# base64-encoded (`base64 < origin.pem | tr -d '\n'`). Checks the result is a real certificate or key.
+#
+#   bin/kamal-pem NAME "$VALUE"     prints the PEM; on a bad value prints why to stderr and exits 1
+require "base64"
+require "openssl"
+
+name, value = ARGV
+value = value.to_s.strip
+
+def fail!(name, why)
+  warn "\n*** #{name}: #{why}"
+  warn "*** Store the PEM file's contents, or `base64 < file.pem | tr -d '\\n'`, in that Bitwarden field.\n\n"
+  exit 1
+end
+
+fail!(name, "is empty") if value.empty?
+
+text = value.include?("-----BEGIN") ? value : Base64.decode64(value.gsub(/\s+/, ""))
+blocks = text.scan(/-----BEGIN ([A-Z0-9 ]+)-----(.*?)-----END \1-----/m)
+fail!(name, "is neither a PEM nor a base64-encoded PEM") if blocks.empty?
+
+pem = blocks.map do |label, body|
+  "-----BEGIN #{label}-----\n#{body.gsub(/\s+/, '').scan(/.{1,64}/).join("\n")}\n-----END #{label}-----\n"
+end.join
+
+parsed = begin
+  OpenSSL::X509::Certificate.new(pem)
+rescue OpenSSL::X509::CertificateError
+  begin
+    OpenSSL::PKey.read(pem)
+  rescue OpenSSL::PKey::PKeyError
+    nil
+  end
+end
+fail!(name, "looks like a PEM but isn't a valid certificate or private key (truncated when copied?)") unless parsed
+
+print pem

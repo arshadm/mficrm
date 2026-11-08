@@ -39,16 +39,19 @@ Side effect to preserve: `PATCH /api/businesses/:id` inserts a `stage_change` ro
 
 **Shared code.** Zod schemas and TS types live in `app/shared/schemas/` and `app/shared/types/`, not at a root `shared/` as the README says. Both client and server import them as `~/shared/...`. Enums such as pipeline stages (`BusinessStageEnum`) and categories are defined there and must stay in sync with the DB values.
 
-**Auth.** Sessions come from `nuxt-auth-utils`. Password hashing is custom (`salt:sha256` in `server/utils/auth.ts`). Client-side route guard: `app/middleware/auth.ts`. Server guard: `server/middleware/auth.ts`, which also leaves `/uploads/*` public.
+**Auth.** Sessions come from `nuxt-auth-utils`. Password hashing is custom (`salt:sha256` in `server/utils/auth.ts`). `app/middleware/auth.ts` is a named (non-global) route middleware that no page currently uses, so pages are not guarded on the client. Server guard: `server/middleware/auth.ts`, which also leaves `/uploads/*` public.
 
 **Frontend.** Nuxt 4 `app/` directory, Pinia stores (`app/stores/`), composables for business/next-step logic (`app/composables/`), and data fetched mostly with `$fetch`. Rich-text fields (business case, growth plan, interaction bodies) are HTML produced by Tiptap (`TiptapEditor.vue`) and rendered by `RichText.vue`. Base UI components are hand-written in `app/components/ui/`. `nuxt.config.ts` sets `pathPrefix: false`, so components register by filename alone (`ui/Button.vue` → `<Button>`, not `<UiButton>`). Component filenames must therefore be unique across all subfolders.
 
 **Other server pieces.**
-- File uploads are written to `UPLOAD_DIR` (`./uploads`) and served at `/uploads` via `nitro.publicAssets`.
+- File uploads are written to `UPLOAD_DIR` (`./uploads`) and served at runtime by `server/routes/uploads/[...path].get.ts`. They can't be Nitro public assets, because those are copied in at build time.
+- `GET /api/health` is the public Kamal health check.
 - PDF and CSV exports use pdfmake and papaparse, under `server/api/businesses/**/export/`.
 - `server/utils/cron.ts` runs a daily job at 08:00 that emails follow-up reminders through Nodemailer (`server/utils/email.ts`).
 
-**Config.** Environment variables are read in two ways: through `runtimeConfig` in `nuxt.config.ts`, and directly via `process.env` in `database.ts` and `seed.ts`.
+**Config.** Server code reads environment variables directly through `process.env` (`DATABASE_URL`, `UPLOAD_DIR`, `ADMIN_*`, `SMTP_*`, `APP_URL`). The `runtimeConfig` values in `nuxt.config.ts` are not used. Session encryption uses `NUXT_SESSION_PASSWORD` (nuxt-auth-utils), not `NUXT_SESSION_SECRET`.
+
+**Deployment.** Kamal 2 (`config/deploy.yml`, `.kamal/secrets` from Bitwarden, `Dockerfile`, `bin/docker-entrypoint`); see `docs/deploy.md`. It runs a single container, and the SQLite DB and uploads live on the `mficrm_data` volume at `/data`. The runtime image contains only `.output`: Nitro bundles server dependencies, including better-sqlite3's native binding.
 
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:1105d646 -->

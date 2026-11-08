@@ -36,16 +36,6 @@ export default defineNuxtConfig({
     },
   },
 
-  nitro: {
-    publicAssets: [
-      {
-        baseURL: '/uploads',
-        dir: '../uploads',
-        maxAge: 0,
-      },
-    ],
-  },
-
   typescript: {
     strict: false,
   },
