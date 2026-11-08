@@ -21,8 +21,8 @@ proxy:
     certificate_pem: ORIGIN_CERTIFICATE_PEM
     private_key_pem: ORIGIN_PRIVATE_KEY_PEM
   hosts:
-    # TODO: the real domain. Keep APP_URL below in step.
-    - crm.example.com
+    # Keep APP_URL below in step.
+    - crm.mfitrading.co.uk
   app_port: 3000
   forward_headers: true
   healthcheck:
