@@ -137,7 +137,8 @@ function closeSidebar() { sidebarOpen.value = false }
           </div>
         </div>
 
-        <div class="ml-auto">
+        <div class="ml-auto flex items-center gap-2">
+          <ThemeToggle />
           <NuxtLink to="/businesses/new">
             <Button size="sm">
               <Icon name="lucide:plus" class="h-4 w-4" />

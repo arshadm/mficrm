@@ -92,16 +92,16 @@ function isPast(date: Date): boolean {
 
 // Category colors
 const categoryBadgeColors: Record<string, string> = {
-  fba: 'bg-orange-100 text-orange-800',
-  saas: 'bg-sky-100 text-sky-800',
-  ios: 'bg-purple-100 text-purple-800',
-  android: 'bg-green-100 text-green-800',
-  content: 'bg-yellow-100 text-yellow-800',
-  ecommerce: 'bg-pink-100 text-pink-800',
-  agency: 'bg-indigo-100 text-indigo-800',
-  marketplace: 'bg-cyan-100 text-cyan-800',
-  newsletter: 'bg-rose-100 text-rose-800',
-  other: 'bg-gray-100 text-gray-700',
+  fba: 'bg-orange-100 dark:bg-orange-500/15 text-orange-800 dark:text-orange-300',
+  saas: 'bg-sky-100 dark:bg-sky-500/15 text-sky-800 dark:text-sky-300',
+  ios: 'bg-purple-100 dark:bg-purple-500/15 text-purple-800 dark:text-purple-300',
+  android: 'bg-green-100 dark:bg-green-500/15 text-green-800 dark:text-green-300',
+  content: 'bg-yellow-100 dark:bg-yellow-500/15 text-yellow-800 dark:text-yellow-300',
+  ecommerce: 'bg-pink-100 dark:bg-pink-500/15 text-pink-800 dark:text-pink-300',
+  agency: 'bg-indigo-100 dark:bg-indigo-500/15 text-indigo-800 dark:text-indigo-300',
+  marketplace: 'bg-cyan-100 dark:bg-cyan-500/15 text-cyan-800 dark:text-cyan-300',
+  newsletter: 'bg-rose-100 dark:bg-rose-500/15 text-rose-800 dark:text-rose-300',
+  other: 'bg-gray-100 dark:bg-muted text-gray-700 dark:text-muted-foreground',
 }
 
 // Week summary
@@ -198,7 +198,7 @@ const headerTitle = computed(() => {
                 :to="`/businesses/${entry.business_id}?tab=next-steps`"
                 :class="[
                   'block rounded-md p-2 border text-xs hover:shadow-sm transition-shadow',
-                  entry.is_overdue ? 'bg-red-50 border-red-200' : 'bg-background border-border'
+                  entry.is_overdue ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/40' : 'bg-background border-border'
                 ]"
               >
                 <div class="flex items-center gap-1 mb-0.5">
@@ -268,7 +268,7 @@ const headerTitle = computed(() => {
                 :to="`/businesses/${entry.business_id}?tab=next-steps`"
                 :class="[
                   'block text-xs truncate rounded px-1 py-0.5 mb-0.5 hover:opacity-80',
-                  entry.is_overdue ? 'bg-red-100 text-red-700' : categoryBadgeColors[entry.business_category] || 'bg-gray-100'
+                  entry.is_overdue ? 'bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300' : categoryBadgeColors[entry.business_category] || 'bg-gray-100 dark:bg-muted'
                 ]"
                 :title="entry.business_name + ': ' + entry.step_title"
               >
@@ -280,7 +280,7 @@ const headerTitle = computed(() => {
                 v-for="entry in getEntriesForDate(d).slice(0, 2)"
                 :key="entry.step_id"
                 :to="`/businesses/${entry.business_id}?tab=next-steps`"
-                :class="['block text-xs truncate rounded px-1 py-0.5 mb-0.5 hover:opacity-80', categoryBadgeColors[entry.business_category] || 'bg-gray-100']"
+                :class="['block text-xs truncate rounded px-1 py-0.5 mb-0.5 hover:opacity-80', categoryBadgeColors[entry.business_category] || 'bg-gray-100 dark:bg-muted']"
               >
                 {{ entry.business_name }}
               </NuxtLink>

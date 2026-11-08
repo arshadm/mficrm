@@ -138,13 +138,13 @@ export const STAGE_LABELS: Record<BusinessStage, string> = {
 }
 
 export const STAGE_COLORS: Record<BusinessStage, string> = {
-  initial_interest: 'bg-indigo-100 text-indigo-800',
-  qualified: 'bg-blue-100 text-blue-800',
-  rejected: 'bg-red-100 text-red-800',
-  seller_engaged: 'bg-amber-100 text-amber-800',
-  offer_made: 'bg-purple-100 text-purple-800',
-  offer_accepted: 'bg-emerald-100 text-emerald-800',
-  offer_rejected: 'bg-rose-100 text-rose-800',
+  initial_interest: 'bg-indigo-100 dark:bg-indigo-500/15 text-indigo-800 dark:text-indigo-300',
+  qualified: 'bg-blue-100 dark:bg-blue-500/15 text-blue-800 dark:text-blue-300',
+  rejected: 'bg-red-100 dark:bg-red-500/15 text-red-800 dark:text-red-300',
+  seller_engaged: 'bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300',
+  offer_made: 'bg-purple-100 dark:bg-purple-500/15 text-purple-800 dark:text-purple-300',
+  offer_accepted: 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-300',
+  offer_rejected: 'bg-rose-100 dark:bg-rose-500/15 text-rose-800 dark:text-rose-300',
 }
 
 export const CATEGORY_LABELS: Record<BusinessCategory, string> = {

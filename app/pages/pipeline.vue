@@ -49,23 +49,23 @@ async function onDrop(event: { added?: { element: Business } }, toStage: Busines
 }
 
 const stageColors: Record<BusinessStage, string> = {
-  initial_interest: 'border-indigo-300 bg-indigo-50/50',
-  qualified: 'border-blue-300 bg-blue-50/50',
-  rejected: 'border-red-300 bg-red-50/50',
-  seller_engaged: 'border-amber-300 bg-amber-50/50',
-  offer_made: 'border-purple-300 bg-purple-50/50',
-  offer_accepted: 'border-emerald-300 bg-emerald-50/50',
-  offer_rejected: 'border-rose-300 bg-rose-50/50',
+  initial_interest: 'border-indigo-300 dark:border-indigo-500/40 bg-indigo-50/50 dark:bg-indigo-500/10',
+  qualified: 'border-blue-300 dark:border-blue-500/40 bg-blue-50/50 dark:bg-blue-500/10',
+  rejected: 'border-red-300 dark:border-red-500/40 bg-red-50/50 dark:bg-red-500/10',
+  seller_engaged: 'border-amber-300 dark:border-amber-500/40 bg-amber-50/50 dark:bg-amber-500/10',
+  offer_made: 'border-purple-300 dark:border-purple-500/40 bg-purple-50/50 dark:bg-purple-500/10',
+  offer_accepted: 'border-emerald-300 dark:border-emerald-500/40 bg-emerald-50/50 dark:bg-emerald-500/10',
+  offer_rejected: 'border-rose-300 dark:border-rose-500/40 bg-rose-50/50 dark:bg-rose-500/10',
 }
 
 const stageHeaderColors: Record<BusinessStage, string> = {
-  initial_interest: 'text-indigo-700 bg-indigo-100',
-  qualified: 'text-blue-700 bg-blue-100',
-  rejected: 'text-red-700 bg-red-100',
-  seller_engaged: 'text-amber-700 bg-amber-100',
-  offer_made: 'text-purple-700 bg-purple-100',
-  offer_accepted: 'text-emerald-700 bg-emerald-100',
-  offer_rejected: 'text-rose-700 bg-rose-100',
+  initial_interest: 'text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-500/15',
+  qualified: 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-500/15',
+  rejected: 'text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-500/15',
+  seller_engaged: 'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-500/15',
+  offer_made: 'text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-500/15',
+  offer_accepted: 'text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-500/15',
+  offer_rejected: 'text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-500/15',
 }
 </script>
 
@@ -96,7 +96,7 @@ const stageHeaderColors: Record<BusinessStage, string> = {
           <!-- Column header -->
           <div :class="['rounded-t-lg px-3 py-2 flex items-center justify-between border-b-0', stageHeaderColors[col.stage as BusinessStage]]">
             <span class="text-sm font-semibold">{{ col.label }}</span>
-            <span class="text-xs font-bold rounded-full px-1.5 py-0.5 bg-white/60">{{ col.businesses.length }}</span>
+            <span class="text-xs font-bold rounded-full px-1.5 py-0.5 bg-white/60 dark:bg-black/30">{{ col.businesses.length }}</span>
           </div>
 
           <!-- Cards -->

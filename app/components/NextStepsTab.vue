@@ -108,7 +108,7 @@ const showHistory = ref(false)
       <div>
         <!-- Active step card -->
         <template v-if="data.primary && !showEditForm">
-          <Card :class="['p-5 border-2', getStatus(data.primary.due_date, data.primary.status).isOverdue ? 'border-red-300' : 'border-primary/30']">
+          <Card :class="['p-5 border-2', getStatus(data.primary.due_date, data.primary.status).isOverdue ? 'border-red-300 dark:border-red-500/40' : 'border-primary/30']">
             <div class="flex items-start justify-between gap-3 mb-3">
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-1">
@@ -284,7 +284,7 @@ const showHistory = ref(false)
                   <td class="px-4 py-2 font-medium">{{ h.title }}</td>
                   <td class="px-4 py-2 text-muted-foreground">{{ formatDate(h.due_date) }}</td>
                   <td class="px-4 py-2">
-                    <span :class="['text-xs px-2 py-0.5 rounded-full', h.status === 'done' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600']">
+                    <span :class="['text-xs px-2 py-0.5 rounded-full', h.status === 'done' ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300' : 'bg-gray-100 dark:bg-muted text-gray-600 dark:text-muted-foreground']">
                       {{ h.status }}
                     </span>
                   </td>

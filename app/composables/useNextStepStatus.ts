@@ -11,14 +11,14 @@ export interface NextStepStatusResult {
 export function useNextStepStatus() {
   function getStatus(dueDate: string | null | undefined, status: NextStepStatus = 'pending'): NextStepStatusResult {
     if (status === 'done') {
-      return { label: 'Done', colour: 'emerald', badgeClass: 'bg-emerald-100 text-emerald-800', isOverdue: false, daysUntilDue: 0 }
+      return { label: 'Done', colour: 'emerald', badgeClass: 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-300', isOverdue: false, daysUntilDue: 0 }
     }
     if (status === 'skipped') {
-      return { label: 'Skipped', colour: 'gray', badgeClass: 'bg-gray-100 text-gray-600', isOverdue: false, daysUntilDue: 0 }
+      return { label: 'Skipped', colour: 'gray', badgeClass: 'bg-gray-100 dark:bg-muted text-gray-600 dark:text-muted-foreground', isOverdue: false, daysUntilDue: 0 }
     }
 
     if (!dueDate) {
-      return { label: 'No date', colour: 'gray', badgeClass: 'bg-gray-100 text-gray-600', isOverdue: false, daysUntilDue: 0 }
+      return { label: 'No date', colour: 'gray', badgeClass: 'bg-gray-100 dark:bg-muted text-gray-600 dark:text-muted-foreground', isOverdue: false, daysUntilDue: 0 }
     }
 
     const today = new Date()
@@ -31,18 +31,18 @@ export function useNextStepStatus() {
       return {
         label: `Overdue (${Math.abs(daysUntilDue)}d)`,
         colour: 'red',
-        badgeClass: 'bg-red-100 text-red-700 font-semibold',
+        badgeClass: 'bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 font-semibold',
         isOverdue: true,
         daysUntilDue,
       }
     }
     if (daysUntilDue === 0) {
-      return { label: 'Due today', colour: 'red', badgeClass: 'bg-red-100 text-red-700 font-semibold', isOverdue: false, daysUntilDue: 0 }
+      return { label: 'Due today', colour: 'red', badgeClass: 'bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 font-semibold', isOverdue: false, daysUntilDue: 0 }
     }
     if (daysUntilDue <= 2) {
-      return { label: `Due in ${daysUntilDue}d`, colour: 'amber', badgeClass: 'bg-amber-100 text-amber-700', isOverdue: false, daysUntilDue }
+      return { label: `Due in ${daysUntilDue}d`, colour: 'amber', badgeClass: 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300', isOverdue: false, daysUntilDue }
     }
-    return { label: `Due ${dueDate}`, colour: 'green', badgeClass: 'bg-emerald-100 text-emerald-700', isOverdue: false, daysUntilDue }
+    return { label: `Due ${dueDate}`, colour: 'green', badgeClass: 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', isOverdue: false, daysUntilDue }
   }
 
   function getKanbanDotClass(dueDate: string | null | undefined, status: NextStepStatus = 'pending'): string {

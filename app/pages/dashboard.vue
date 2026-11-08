@@ -41,6 +41,27 @@ const { Bar, Pie } = await import('vue-chartjs')
 const { Chart, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } = await import('chart.js')
 Chart.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement)
 
+// Chart.js draws on a canvas, so it can't use the CSS theme tokens: pick label, grid and slice-border colours per mode
+const colorMode = useColorMode()
+const chartTheme = computed(() => colorMode.value === 'dark'
+  ? { text: '#94a3b8', grid: 'rgba(148, 163, 184, 0.15)', sliceBorder: '#0f172a' }
+  : { text: '#64748b', grid: 'rgba(0, 0, 0, 0.08)', sliceBorder: '#ffffff' })
+
+const barOptions = computed(() => ({
+  responsive: true,
+  plugins: { legend: { display: false } },
+  scales: {
+    x: { ticks: { color: chartTheme.value.text }, grid: { color: chartTheme.value.grid } },
+    y: { ticks: { color: chartTheme.value.text }, grid: { color: chartTheme.value.grid } },
+  },
+}))
+
+const pieOptions = computed(() => ({
+  responsive: true,
+  borderColor: chartTheme.value.sliceBorder,
+  plugins: { legend: { labels: { color: chartTheme.value.text } } },
+}))
+
 // Complete action modal
 const showCompleteModal = ref(false)
 const completingAction = ref<TodayAction | null>(null)
@@ -77,11 +98,11 @@ async function handleComplete() {
     </div>
 
     <!-- TODAY'S ACTIONS — prominently at top -->
-    <Card class="p-5 border-2" :class="todayActions?.length ? 'border-amber-300/50 bg-amber-50/30' : 'border-border'">
+    <Card class="p-5 border-2" :class="todayActions?.length ? 'border-amber-300/50 dark:border-amber-500/40 bg-amber-50/30 dark:bg-amber-500/10' : 'border-border'">
       <div class="flex items-center gap-2 mb-4">
         <Icon name="lucide:zap" class="h-5 w-5 text-amber-500" />
         <h2 class="font-semibold">Today's Actions</h2>
-        <span v-if="todayActions?.length" class="ml-auto text-xs bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
+        <span v-if="todayActions?.length" class="ml-auto text-xs bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-300 font-bold px-2 py-0.5 rounded-full">
           {{ todayActions.length }} due
         </span>
       </div>
@@ -104,7 +125,7 @@ async function handleComplete() {
             </NuxtLink>
             <p class="text-xs text-muted-foreground truncate">{{ action.step_title }}</p>
           </div>
-          <span :class="['text-xs shrink-0 font-medium', getStatus(action.due_date, 'pending').isOverdue ? 'text-destructive' : 'text-amber-600']">
+          <span :class="['text-xs shrink-0 font-medium', getStatus(action.due_date, 'pending').isOverdue ? 'text-destructive' : 'text-amber-600 dark:text-amber-300']">
             {{ getStatus(action.due_date, 'pending').isOverdue ? 'Overdue' : 'Due today' }}
           </span>
           <Button size="sm" variant="outline" class="shrink-0 h-7 text-xs" @click="openCompleteModal(action)">
@@ -158,12 +179,12 @@ async function handleComplete() {
       <div class="grid lg:grid-cols-3 gap-6">
         <Card class="p-5 lg:col-span-1">
           <h2 class="font-semibold mb-4">By Stage</h2>
-          <Bar :data="stageChartData" :options="{ responsive: true, plugins: { legend: { display: false } } }" />
+          <Bar :key="`bar-${colorMode.value}`" :data="stageChartData" :options="barOptions" />
         </Card>
 
         <Card class="p-5 lg:col-span-1">
           <h2 class="font-semibold mb-4">By Category</h2>
-          <Pie :data="categoryChartData" :options="{ responsive: true }" />
+          <Pie :key="`pie-${colorMode.value}`" :data="categoryChartData" :options="pieOptions" />
         </Card>
 
         <Card class="p-5 lg:col-span-1">

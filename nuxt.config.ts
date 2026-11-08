@@ -7,7 +7,17 @@ export default defineNuxtConfig({
     '@pinia/nuxt',
     'nuxt-auth-utils',
     '@nuxt/icon',
+    '@nuxtjs/color-mode',
   ],
+
+  // Dark mode: adds `dark` to <html> (Tailwind darkMode: 'class'). Follows the OS until the user picks one
+  // with ThemeToggle; the choice is kept in localStorage.
+  colorMode: {
+    classSuffix: '',
+    preference: 'system',
+    fallback: 'light',
+    storageKey: 'acquiredesk-color-mode',
+  },
 
   // Register components by filename only (ui/Button.vue → <Button>, not <UiButton>)
   components: [

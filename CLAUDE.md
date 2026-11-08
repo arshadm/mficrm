@@ -43,6 +43,8 @@ Side effect to preserve: `PATCH /api/businesses/:id` inserts a `stage_change` ro
 
 **Frontend.** Nuxt 4 `app/` directory, Pinia stores (`app/stores/`), composables for business/next-step logic (`app/composables/`), and data fetched mostly with `$fetch`. Rich-text fields (business case, growth plan, interaction bodies) are HTML produced by Tiptap (`TiptapEditor.vue`) and rendered by `RichText.vue`. Base UI components are hand-written in `app/components/ui/`. `nuxt.config.ts` sets `pathPrefix: false`, so components register by filename alone (`ui/Button.vue` → `<Button>`, not `<UiButton>`). Component filenames must therefore be unique across all subfolders.
 
+**Dark mode.** `@nuxtjs/color-mode` puts `dark` on `<html>` (Tailwind `darkMode: 'class'`). The setting follows the OS until changed with `ThemeToggle.vue`, which is in both layouts. Dark token values are under `.dark` in `app/assets/css/main.css`. Prefer the theme tokens (`bg-card`, `text-muted-foreground`, …). When using a palette colour, add a dark variant alongside it. The convention is `bg-X-100 dark:bg-X-500/15`, `text-X-800 dark:text-X-300` and `border-X-300 dark:border-X-500/40`; gray maps to `muted` tokens. Chart.js can't read CSS, so `dashboard.vue` picks chart colours from `useColorMode()`.
+
 **Other server pieces.**
 - File uploads are written to `UPLOAD_DIR` (`./uploads`) and served at runtime by `server/routes/uploads/[...path].get.ts`. They can't be Nitro public assets, because those are copied in at build time.
 - `GET /api/health` is the public Kamal health check.

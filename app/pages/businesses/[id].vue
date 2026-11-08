@@ -377,7 +377,7 @@ const unresolvedRisks = computed(() => risks.value.filter(r => !r.is_resolved).l
               <p v-if="unresolvedRisks > 0" class="text-sm text-destructive font-medium">
                 {{ unresolvedRisks }} unresolved risk{{ unresolvedRisks !== 1 ? 's' : '' }}
               </p>
-              <p v-else-if="risks.length" class="text-sm text-emerald-600 font-medium">All risks resolved</p>
+              <p v-else-if="risks.length" class="text-sm text-emerald-600 dark:text-emerald-300 font-medium">All risks resolved</p>
             </div>
             <div class="flex gap-2">
               <Button v-if="!risks.length" variant="outline" size="sm" @click="seedDefaultRisks">
