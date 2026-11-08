@@ -66,6 +66,8 @@ Migrations (`server/db/migrate.ts`) run on every boot. Keep them backwards compa
 | `kamal rollback <version>` | Go back to an earlier image (`kamal app versions` lists them) |
 | `kamal app boot` | Restart the app, e.g. after changing a secret |
 
+**Locked out?** After 5 failed logins for a username, or 20 from one IP, logins are refused for 15 minutes. The counters live in memory, so `kamal app boot` clears them immediately. They're keyed on Cloudflare's `cf-connecting-ip` header (`TRUSTED_IP_HEADER`), which is only trustworthy while the firewall admits nothing but Cloudflare on ports 80 and 443.
+
 A changed secret or setting only reaches the container on the next `kamal deploy`, or after `kamal env push` followed by `kamal app boot`.
 
 ## Backups

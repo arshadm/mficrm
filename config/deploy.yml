@@ -48,6 +48,9 @@ env:
     DATABASE_URL: /data/db/crm.db
     UPLOAD_DIR: /data/uploads
     ADMIN_USERNAME: admin
+    # Login rate limits read the visitor IP from Cloudflare (server/utils/loginRateLimit.ts). Safe only while the
+    # firewall lets nothing but Cloudflare reach ports 80/443.
+    TRUSTED_IP_HEADER: cf-connecting-ip
     # TODO: SMTP server and sender for the 08:00 follow-up reminder emails
     SMTP_HOST: smtp.example.com
     SMTP_PORT: "587"
