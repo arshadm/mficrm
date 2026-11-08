@@ -9,6 +9,11 @@ export default defineNuxtConfig({
     '@nuxt/icon',
   ],
 
+  // Register components by filename only (ui/Button.vue → <Button>, not <UiButton>)
+  components: [
+    { path: '~/components', pathPrefix: false },
+  ],
+
   css: ['~/assets/css/main.css'],
 
   tailwindcss: {
