@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import type { Business } from '~/shared/types'
 
 export const useBusinessesStore = defineStore('businesses', () => {
+  // Forwards the visitor's session cookie when this runs during server rendering (plain $fetch doesn't)
+  const requestFetch = useRequestFetch()
   const businesses = ref<Business[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -25,7 +27,7 @@ export const useBusinessesStore = defineStore('businesses', () => {
       const params = Object.fromEntries(
         Object.entries(filters.value).filter(([, v]) => v !== '')
       )
-      businesses.value = await $fetch<Business[]>('/api/businesses', { query: params })
+      businesses.value = await requestFetch<Business[]>('/api/businesses', { query: params })
     } catch (e: unknown) {
       error.value = (e as Error).message
     } finally {

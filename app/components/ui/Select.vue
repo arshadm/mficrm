@@ -31,7 +31,9 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
     ]"
     @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
   >
-    <option value="">{{ placeholder }}</option>
-    <option v-for="opt in options" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+    <!-- `selected` on the option too: server rendering drops a <select>'s value, so the page would otherwise show
+         the placeholder until hydration (which doesn't correct it) -->
+    <option value="" :selected="modelValue == null || modelValue === ''">{{ placeholder }}</option>
+    <option v-for="opt in options" :key="opt.value" :value="opt.value" :selected="String(opt.value) === String(modelValue ?? '')">{{ opt.label }}</option>
   </select>
 </template>

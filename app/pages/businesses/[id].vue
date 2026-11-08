@@ -15,11 +15,38 @@ const { data: valuation, saving: savingValuation, fetch: fetchValuation, save: s
 const { risks, loading: loadingRisks, fetchRisks, addRisk, updateRisk, deleteRisk } = useRisks(idRef)
 const { interactions, loading: loadingInteractions, fetchInteractions, addInteraction, deleteInteraction } = useInteractions(idRef)
 
+const documentCount = ref(0)
+
+// Notes | Chat side pane (mficrm-bwv.4)
+const pane = useCompanyPane()
+const shortcutHint = ref('Ctrl+Shift+E')
+function togglePane(which: 'notes' | 'chat') {
+  if (pane.open.value && pane.tab.value === which) {
+    pane.open.value = false
+    pane.persist()
+  } else {
+    pane.show(which)
+  }
+}
+function onPaneShortcut(e: KeyboardEvent) {
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'e') {
+    e.preventDefault()
+    pane.show('chat')
+  }
+}
+onMounted(() => {
+  pane.restore()
+  if (/Mac|iPhone|iPad/.test(navigator.platform)) shortcutHint.value = '⌘⇧E'
+  window.addEventListener('keydown', onPaneShortcut)
+})
+onBeforeUnmount(() => window.removeEventListener('keydown', onPaneShortcut))
+
 // Support ?tab=next-steps query param for deep linking
 const activeTab = ref((route.query.tab as string) || 'overview')
 
 const tabs = [
   { id: 'overview', label: 'Overview', icon: 'lucide:info' },
+  { id: 'documents', label: 'Documents', icon: 'lucide:folder-open' },
   { id: 'next-steps', label: 'Next Steps', icon: 'lucide:target' },
   { id: 'case', label: 'Business Case', icon: 'lucide:file-text' },
   { id: 'growth', label: 'Growth Plan', icon: 'lucide:trending-up' },
@@ -27,18 +54,25 @@ const tabs = [
   { id: 'risks', label: 'Risk Checklist', icon: 'lucide:shield-alert' },
   { id: 'valuation', label: 'Valuation', icon: 'lucide:bar-chart-2' },
   { id: 'interactions', label: 'Interactions', icon: 'lucide:message-circle' },
+  { id: 'forms', label: 'Forms', icon: 'lucide:clipboard-list' },
 ]
 
-await fetchBusiness()
+// Fetched during server rendering and handed to the client in the payload, so hydration sees the same data
+const { data: initialBusiness } = await useAsyncData(`business-${id.value}`, () => fetchBusiness().then(() => business.value))
+if (!business.value && initialBusiness.value) business.value = initialBusiness.value
 
-watch(activeTab, async (tab) => {
+// Tab data loads on first view. Also for the tab opened directly (?tab=…), once in the browser: these composables
+// use plain $fetch, which has no session cookie during server rendering.
+async function loadTab(tab: string) {
   if (tab === 'case' && !businessCase.value) await fetchCase()
   if (tab === 'growth' && !growthPlan.value) await fetchGrowth()
   if (tab === 'capital' && !workingCapital.value) await fetchCapital()
   if (tab === 'risks' && !risks.value.length) await fetchRisks()
   if (tab === 'valuation' && !valuation.value) await fetchValuation()
   if (tab === 'interactions' && !interactions.value.length) await fetchInteractions()
-})
+}
+watch(activeTab, loadTab)
+onMounted(() => loadTab(activeTab.value))
 
 // Overview form
 const form = reactive<Partial<Business>>({})
@@ -122,6 +156,7 @@ const interactionTypeIcons: Record<string, string> = {
   document: 'lucide:file',
   stage_change: 'lucide:git-merge',
   offer: 'lucide:handshake',
+  form_submission: 'lucide:clipboard-check',
   other: 'lucide:circle',
 }
 
@@ -151,7 +186,7 @@ async function handleAddInteraction() {
 
 async function handleArchive() {
   if (!confirm('Archive this business?')) return
-  await saveBusiness({ is_archived: 1 } as any)
+  await saveBusiness({ is_archived: true } as any)
   await router.push('/businesses')
 }
 
@@ -171,7 +206,8 @@ const unresolvedRisks = computed(() => risks.value.filter(r => !r.is_resolved).l
     <EmptyState title="Business not found" icon="lucide:search" />
   </div>
 
-  <div v-else class="flex flex-col h-full">
+  <div v-else class="flex h-full min-h-0">
+  <div class="flex flex-col h-full flex-1 min-w-0">
     <!-- Header -->
     <div class="border-b bg-card px-6 py-4 shrink-0">
       <div class="flex items-start justify-between gap-4 mb-3">
@@ -189,6 +225,14 @@ const unresolvedRisks = computed(() => risks.value.filter(r => !r.is_resolved).l
           </div>
         </div>
         <div class="flex gap-2 shrink-0">
+          <Button :variant="pane.open.value && pane.tab.value === 'notes' ? 'default' : 'outline'" size="sm" title="The team's notes on this company" data-test="open-notes" @click="togglePane('notes')">
+            <Icon name="lucide:notebook-pen" class="h-4 w-4" />
+            <span class="hidden sm:inline">Notes</span>
+          </Button>
+          <Button :variant="pane.open.value && pane.tab.value === 'chat' ? 'default' : 'outline'" size="sm" :title="`Chat with Claude about this company (${shortcutHint})`" data-test="open-chat" @click="togglePane('chat')">
+            <Icon name="lucide:messages-square" class="h-4 w-4" />
+            <span class="hidden sm:inline">Chat</span>
+          </Button>
           <Button variant="outline" size="sm" @click="exportPdf">
             <Icon name="lucide:file-down" class="h-4 w-4" />
             <span class="hidden sm:inline">PDF</span>
@@ -529,6 +573,18 @@ const unresolvedRisks = computed(() => risks.value.filter(r => !r.is_resolved).l
           </template>
         </div>
 
+        <!-- TAB: Documents -->
+        <div v-if="activeTab === 'documents'" class="max-w-3xl space-y-6">
+          <DocumentsPanel :business-id="business.id" @count="documentCount = $event" />
+          <AiSummaryPanel :business-id="business.id" :document-count="documentCount" />
+        </div>
+
+        <!-- TAB: Forms -->
+        <div v-if="activeTab === 'forms'" class="max-w-3xl space-y-8">
+          <CompanyFormsPanel :business-id="business.id" :business-name="business.name" />
+          <FormLinksPanel :business-id="business.id" />
+        </div>
+
         <!-- TAB: Interactions -->
         <div v-if="activeTab === 'interactions'" class="space-y-4 max-w-2xl">
           <div class="flex justify-between items-center">
@@ -562,7 +618,7 @@ const unresolvedRisks = computed(() => risks.value.filter(r => !r.is_resolved).l
                   <div class="flex items-start justify-between gap-2 mb-2">
                     <div>
                       <span class="font-medium text-sm">{{ interaction.title || interaction.type }}</span>
-                      <span class="ml-2 text-xs text-muted-foreground capitalize bg-muted px-1.5 py-0.5 rounded">{{ interaction.type }}</span>
+                      <span class="ml-2 text-xs text-muted-foreground capitalize bg-muted px-1.5 py-0.5 rounded">{{ interaction.type?.replace(/_/g, ' ') }}</span>
                     </div>
                     <div class="flex items-center gap-2 shrink-0">
                       <span class="text-xs text-muted-foreground">{{ formatDateTime(interaction.occurred_at) }}</span>
@@ -633,5 +689,9 @@ const unresolvedRisks = computed(() => risks.value.filter(r => !r.is_resolved).l
 
       </div>
     </div>
+  </div>
+  <ClientOnly>
+    <CompanyPane :business="business" />
+  </ClientOnly>
   </div>
 </template>

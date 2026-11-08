@@ -1,25 +1,26 @@
 import { createReadStream } from 'fs'
 import { stat } from 'fs/promises'
-import { basename, join, resolve } from 'path'
+import { basename, join } from 'path'
 import { prisma } from '../../db/prisma'
+import { fileResponseHeaders, uploadDir } from '../../utils/files'
 
-// Serves attachments from UPLOAD_DIR at request time (it's a volume in production, so files can't be baked into
-// the build as public assets). Still public, as before (server/middleware/auth.ts); see mficrm-xln.3.
+// Serves stored files from UPLOAD_DIR to logged-in users only. (Files are on a volume in production, so they can't
+// be baked into the build as public assets.)
 export default defineEventHandler(async (event) => {
+  const session = await getUserSession(event)
+  if (!session?.user) throw createError({ statusCode: 401, message: 'Unauthorized' })
+
   const filename = basename(getRouterParam(event, 'path') || '')
   if (!filename || filename.startsWith('.')) throw createError({ statusCode: 404 })
 
-  const filePath = join(resolve(process.env.UPLOAD_DIR || './uploads'), filename)
+  // Only files the app recorded; anything else in the directory is never served
+  const row = await prisma.attachment.findUnique({ where: { filename }, select: { original_name: true, mime_type: true } })
+  if (!row) throw createError({ statusCode: 404 })
+
+  const filePath = join(uploadDir(), filename)
   const info = await stat(filePath).catch(() => null)
   if (!info?.isFile()) throw createError({ statusCode: 404 })
 
-  const row = await prisma.attachment.findUnique({ where: { filename }, select: { original_name: true, mime_type: true } })
-
-  setResponseHeaders(event, {
-    'Content-Type': row?.mime_type || 'application/octet-stream',
-    'Content-Length': String(info.size),
-    'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(row?.original_name || filename)}`,
-    'X-Content-Type-Options': 'nosniff',
-  })
+  setResponseHeaders(event, fileResponseHeaders(row, info.size, filename))
   return sendStream(event, createReadStream(filePath))
 })

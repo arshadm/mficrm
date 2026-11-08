@@ -51,6 +51,7 @@ export default defineEventHandler(async (event) => {
       assigned_to: d.assigned_to,
       follow_up_date: d.follow_up_date === undefined ? undefined : toDate(d.follow_up_date),
       follow_up_note: d.follow_up_note,
+      is_archived: d.is_archived,
       last_updated: now,
     },
   })

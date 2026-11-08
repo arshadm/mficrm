@@ -1,4 +1,5 @@
 import { idParam, orNotFound, prisma } from '../../../db/prisma'
+import { sanitizeRichText } from '../../../utils/html'
 import { withUser } from '../../../utils/rows'
 import { CreateInteractionSchema } from '~/shared/schemas'
 
@@ -23,7 +24,7 @@ export default defineEventHandler(async (event) => {
         user_id: session.user.id,
         type: d.type,
         title: d.title ?? null,
-        body: d.body ?? null,
+        body: sanitizeRichText(d.body ?? null),
         occurred_at: occurred,
         created_at: now,
       },

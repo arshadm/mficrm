@@ -54,7 +54,7 @@ async function exportCsv() {
 
 async function bulkArchive() {
   const ids = Array.from(selectedIds.value)
-  await Promise.all(ids.map(id => $fetch(`/api/businesses/${id}`, { method: 'PATCH', body: { is_archived: 1 } })))
+  await Promise.all(ids.map(id => $fetch(`/api/businesses/${id}`, { method: 'PATCH', body: { is_archived: true } })))
   selectedIds.value.clear()
   await businessesStore.fetchBusinesses()
 }

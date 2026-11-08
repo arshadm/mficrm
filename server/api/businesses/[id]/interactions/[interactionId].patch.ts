@@ -1,4 +1,5 @@
 import { idParam, orNotFound, prisma } from '../../../../db/prisma'
+import { sanitizeRichText } from '../../../../utils/html'
 import { CreateInteractionSchema } from '~/shared/schemas'
 
 export default defineEventHandler(async (event) => {
@@ -22,7 +23,7 @@ export default defineEventHandler(async (event) => {
     data: {
       type: d.type,
       title: d.title === undefined ? undefined : d.title ?? null,
-      body: d.body === undefined ? undefined : d.body ?? null,
+      body: d.body === undefined ? undefined : sanitizeRichText(d.body ?? null),
       occurred_at: occurred,
     },
   }), 'Interaction not found')

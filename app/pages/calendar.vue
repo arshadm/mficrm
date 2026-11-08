@@ -32,9 +32,10 @@ function toDateStr(d: Date): string {
   return d.toISOString().split('T')[0]
 }
 
+const requestFetch = useRequestFetch() // forwards the session cookie during server rendering
 const { data: calendarData, refresh, pending } = await useAsyncData(
   'calendar',
-  () => $fetch<CalendarData>('/api/calendar', {
+  () => requestFetch<CalendarData>('/api/calendar', {
     query: { from: toDateStr(dateRange.value.start), to: toDateStr(dateRange.value.end) },
   }),
   { watch: [dateRange] }
@@ -121,9 +122,9 @@ const weekSummary = computed(() => {
 const headerTitle = computed(() => {
   const { start, end } = dateRange.value
   if (viewMode.value === 'week') {
-    return `${start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+    return `${start.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-GB', { month: 'short', day: 'numeric', year: 'numeric' })}`
   }
-  return start.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+  return start.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 })
 </script>
 
@@ -177,7 +178,7 @@ const headerTitle = computed(() => {
               isToday(d) ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'
             ]"
           >
-            <div>{{ d.toLocaleDateString(undefined, { weekday: 'short' }) }}</div>
+            <div>{{ d.toLocaleDateString('en-GB', { weekday: 'short' }) }}</div>
             <div :class="['text-lg font-bold', isToday(d) ? '' : 'text-foreground']">{{ d.getDate() }}</div>
           </div>
 

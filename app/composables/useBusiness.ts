@@ -5,11 +5,13 @@ export function useBusiness(id: Ref<string | number>) {
   const loading = ref(false)
   const saving = ref(false)
   const error = ref<string | null>(null)
+  // Forwards the visitor's session cookie when this runs during server rendering (plain $fetch doesn't)
+  const requestFetch = useRequestFetch()
 
   async function fetchBusiness() {
     loading.value = true
     try {
-      business.value = await $fetch<Business>(`/api/businesses/${id.value}`)
+      business.value = await requestFetch<Business>(`/api/businesses/${id.value}`)
     } catch (e: unknown) {
       error.value = (e as Error).message
     } finally {

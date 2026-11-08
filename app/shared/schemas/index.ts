@@ -11,7 +11,9 @@ export const BusinessStageEnum = z.enum([
 ])
 
 export const InteractionTypeEnum = z.enum([
-  'note', 'email', 'call', 'meeting', 'document', 'stage_change', 'offer', 'other'
+  'note', 'email', 'call', 'meeting', 'document', 'stage_change', 'offer', 'other',
+  // Written by the server when someone submits a form link tied to the business (mficrm-xln.6)
+  'form_submission',
 ])
 
 export const CreateBusinessSchema = z.object({
@@ -30,7 +32,10 @@ export const CreateBusinessSchema = z.object({
   follow_up_note: z.string().optional().nullable(),
 })
 
-export const UpdateBusinessSchema = CreateBusinessSchema.partial()
+export const UpdateBusinessSchema = CreateBusinessSchema.partial().extend({
+  // Archive / unarchive. Older callers send 1/0.
+  is_archived: z.union([z.boolean(), z.literal(0), z.literal(1)]).transform(Boolean).optional(),
+})
 
 export const BusinessCaseSchema = z.object({
   strategic_rationale: z.string().optional().nullable(),
@@ -96,3 +101,34 @@ export const CreateUserSchema = z.object({
   email: z.string().email().optional().nullable(),
   role: z.enum(['admin', 'user']).default('user'),
 })
+
+// Forms (mficrm-xln.2). The form definition schema itself is FormSchemaDefSchema in ~/shared/forms.
+const FormFieldsSchema = z.object({
+  name: z.string().trim().min(1, 'Name is required').max(200),
+  description: z.string().trim().max(2000).optional().nullable(),
+})
+
+export const CreateFormSchema = FormFieldsSchema.extend({
+  // A form made for one company
+  business_id: z.number().int().positive().optional().nullable(),
+})
+
+export const UpdateFormSchema = FormFieldsSchema.partial().extend({
+  draft_schema: z.unknown().optional(),
+  // Archive hides a form from use; restoring returns it to published (if it has versions) or draft
+  archived: z.boolean().optional(),
+})
+
+// Form links (mficrm-xln.4)
+export const FORM_LINK_DEFAULT_DAYS = 14
+export const FORM_LINK_MAX_DAYS = 90
+
+export const CreateFormRequestSchema = z.object({
+  form_id: z.number().int().positive(),
+  business_id: z.number().int().positive().optional().nullable(),
+  recipient_name: z.string().trim().max(200).optional().nullable(),
+  recipient_email: z.union([z.literal(''), z.email('Enter a valid email address').max(254)]).optional().nullable(),
+  expires_in_days: z.number().int().min(1).max(FORM_LINK_MAX_DAYS).default(FORM_LINK_DEFAULT_DAYS),
+  send_email: z.boolean().default(false),
+  message: z.string().trim().max(2000).optional().nullable(),
+}).refine(d => !d.send_email || !!d.recipient_email, { path: ['recipient_email'], message: 'An email address is needed to send the link' })

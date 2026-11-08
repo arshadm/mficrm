@@ -1,4 +1,5 @@
 import { idParam, prisma } from '../../../../../db/prisma'
+import { escapeHtml } from '../../../../../utils/html'
 import { z } from 'zod'
 
 export default defineEventHandler(async (event) => {
@@ -26,7 +27,7 @@ export default defineEventHandler(async (event) => {
         user_id: session.user.id,
         type: 'note',
         title: `Next step skipped: ${step.title}`,
-        body: completion_note ? `<p>${completion_note}</p>` : '<p>Next step was skipped.</p>',
+        body: completion_note ? `<p>${escapeHtml(completion_note)}</p>` : '<p>Next step was skipped.</p>',
         occurred_at: now,
         created_at: now,
       },

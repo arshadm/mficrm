@@ -1,18 +1,12 @@
 import { defineStore } from 'pinia'
 import type { User } from '~/shared/types'
 
+// The logged-in user comes from nuxt-auth-utils' session state, which is loaded during server rendering, so the
+// server and the browser render the same user (no hydration mismatch, no extra /api/auth/me request).
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref<User | null>(null)
   const loading = ref(false)
-
-  async function fetchMe() {
-    try {
-      const data = await $fetch<User>('/api/auth/me')
-      user.value = data
-    } catch {
-      user.value = null
-    }
-  }
+  const { fetch: refreshSession, session, user: sessionUser } = useUserSession()
+  const user = computed(() => (sessionUser.value as User | null) ?? null)
 
   async function login(username: string, password: string) {
     loading.value = true
@@ -21,7 +15,7 @@ export const useAuthStore = defineStore('auth', () => {
         method: 'POST',
         body: { username, password },
       })
-      user.value = data
+      await refreshSession()
       return data
     } finally {
       loading.value = false
@@ -30,9 +24,9 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout() {
     await $fetch('/api/auth/logout', { method: 'POST' })
-    user.value = null
+    session.value = null
     await navigateTo('/login')
   }
 
-  return { user, loading, fetchMe, login, logout }
+  return { user, loading, login, logout }
 })

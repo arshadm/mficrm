@@ -3,6 +3,7 @@ definePageMeta({ layout: 'auth' })
 
 const authStore = useAuthStore()
 const router = useRouter()
+const route = useRoute()
 
 const form = reactive({ username: '', password: '' })
 const error = ref('')
@@ -13,7 +14,11 @@ async function handleLogin() {
   loading.value = true
   try {
     await authStore.login(form.username, form.password)
-    await router.push('/dashboard')
+    // Back to the page the visitor originally asked for (same-site paths only)
+    const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') && !route.query.redirect.startsWith('//')
+      ? route.query.redirect
+      : '/dashboard'
+    await router.push(redirect)
   } catch (e: unknown) {
     error.value = (e as { data?: { message?: string }, message?: string })?.data?.message || 'Invalid credentials'
   } finally {

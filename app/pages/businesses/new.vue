@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { STAGE_LABELS, CATEGORY_LABELS, STAGE_ORDER } from '~/shared/types'
 import type { BusinessStage, BusinessCategory } from '~/shared/types'
+import type { AiPrefill } from '~/shared/ai'
 
 const router = useRouter()
 const businessesStore = useBusinessesStore()
@@ -20,7 +21,46 @@ const form = reactive({
   follow_up_note: '',
 })
 
+const documents = ref<File[]>([])
 const errors = ref<Record<string, string>>({})
+
+// AI prefill from the chosen documents (mficrm-b6g.4): fills only fields that are still empty
+const { configured, loadStatus } = useAi()
+onMounted(loadStatus)
+const prefilling = ref(false)
+const prefillError = ref('')
+const prefillResult = ref<{ filled: string[], notes: string[], skipped: { name: string, reason: string }[] } | null>(null)
+const PREFILL_LABELS: Record<string, string> = {
+  name: 'name', category: 'category', platform: 'platform', listing_url: 'listing URL', asking_price: 'asking price',
+  trailing_12m_revenue: 'revenue', trailing_12m_profit: 'profit', date_listed: 'date listed', description: 'description',
+}
+
+async function prefill() {
+  prefillError.value = ''
+  prefillResult.value = null
+  prefilling.value = true
+  try {
+    const body = new FormData()
+    for (const f of documents.value) body.append('files', f, f.name)
+    const res = await $fetch<{ fields: AiPrefill, skipped: { name: string, reason: string }[] }>('/api/ai/prefill', { method: 'POST', body })
+    const filled: string[] = []
+    const target = form as Record<string, unknown>
+    for (const key of Object.keys(PREFILL_LABELS)) {
+      const value = res.fields[key as keyof AiPrefill]
+      const current = target[key]
+      if (value === null || value === undefined || value === '') continue
+      if (current !== '' && current !== null && current !== undefined) continue
+      if (key === 'date_listed' && !/^\d{4}-\d{2}-\d{2}$/.test(String(value))) continue
+      target[key] = value
+      filled.push(PREFILL_LABELS[key]!)
+    }
+    prefillResult.value = { filled, notes: res.fields.notes, skipped: res.skipped }
+  } catch (e) {
+    prefillError.value = errorMessage(e, 'Claude could not read the documents')
+  } finally {
+    prefilling.value = false
+  }
+}
 const saving = ref(false)
 
 const stageOptions = STAGE_ORDER.map(s => ({ value: s, label: STAGE_LABELS[s] }))
@@ -45,6 +85,19 @@ async function handleSubmit() {
       follow_up_note: form.follow_up_note || null,
       description: form.description || null,
     })
+    // Documents are uploaded once the company exists; a failure leaves the company in place and opens its
+    // Documents tab so they can be added again
+    if (documents.value.length) {
+      const body = new FormData()
+      for (const f of documents.value) body.append('files', f, f.name)
+      try {
+        await $fetch(`/api/businesses/${business.id}/documents`, { method: 'POST', body })
+      } catch (e: unknown) {
+        alert(`The company was created, but its documents could not be uploaded: ${(e as { data?: { message?: string } })?.data?.message || 'upload failed'}`)
+        await router.push(`/businesses/${business.id}?tab=documents`)
+        return
+      }
+    }
     await router.push(`/businesses/${business.id}`)
   } catch (e: unknown) {
     errors.value.general = (e as Error).message || 'Failed to create business'
@@ -68,6 +121,32 @@ async function handleSubmit() {
       <form class="space-y-5" @submit.prevent="handleSubmit">
         <div v-if="errors.general" class="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">
           {{ errors.general }}
+        </div>
+
+        <FormField label="Documents" hint="Optional. PDF, CSV or Excel, up to 20 MB each. Kept with the company.">
+          <DocumentPicker v-model="documents" />
+        </FormField>
+        <div v-if="configured && documents.length" class="rounded-md border border-primary/30 bg-primary/5 p-3 space-y-2" data-test="ai-prefill">
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <p class="text-sm">Let Claude fill in the details below from these documents.</p>
+            <Button type="button" size="sm" :loading="prefilling" data-test="ai-prefill-button" @click="prefill">
+              <Icon name="lucide:sparkles" class="h-4 w-4" />
+              Fill in from documents
+            </Button>
+          </div>
+          <p v-if="prefilling" class="text-xs text-muted-foreground">Reading the documents. This can take up to a minute.</p>
+          <p v-if="prefillError" class="text-sm text-destructive">{{ prefillError }}</p>
+          <div v-if="prefillResult" class="text-sm space-y-1">
+            <p class="text-green-700 dark:text-green-300">
+              {{ prefillResult.filled.length ? `Filled in: ${prefillResult.filled.join(', ')}.` : 'Nothing new to fill in.' }} Check the values before saving.
+            </p>
+            <ul v-if="prefillResult.notes.length" class="list-disc pl-5 text-muted-foreground text-xs space-y-0.5">
+              <li v-for="(n, i) in prefillResult.notes" :key="i">{{ n }}</li>
+            </ul>
+            <p v-if="prefillResult.skipped.length" class="text-xs text-amber-700 dark:text-amber-300">
+              Not read: {{ prefillResult.skipped.map(s => `${s.name} (${s.reason})`).join(', ') }}
+            </p>
+          </div>
         </div>
 
         <div class="grid sm:grid-cols-2 gap-4">

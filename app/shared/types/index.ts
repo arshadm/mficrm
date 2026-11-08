@@ -7,7 +7,7 @@ export type BusinessStage =
   | 'offer_made' | 'offer_accepted' | 'offer_rejected'
 
 export type InteractionType =
-  | 'note' | 'email' | 'call' | 'meeting' | 'document' | 'stage_change' | 'offer' | 'other'
+  | 'note' | 'email' | 'call' | 'meeting' | 'document' | 'stage_change' | 'offer' | 'other' | 'form_submission'
 
 export type UserRole = 'admin' | 'user'
 

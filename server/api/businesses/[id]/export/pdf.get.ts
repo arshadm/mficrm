@@ -21,7 +21,8 @@ export default defineEventHandler(async (event) => {
     prisma.riskItem.findMany({ where: { business_id: id }, orderBy: { id: 'asc' } }) as Promise<Array<Record<string, unknown>>>,
   ])
 
-  const PdfPrinter = (await import('pdfmake')).default
+  // pdfmake 0.3 exports a configured instance (the PdfPrinter class is gone)
+  const pdfmake = (await import('pdfmake')).default
   const fonts = {
     Helvetica: {
       normal: 'Helvetica',
@@ -31,7 +32,9 @@ export default defineEventHandler(async (event) => {
     },
   }
 
-  const printer = new PdfPrinter(fonts)
+  pdfmake.setFonts(fonts)
+  // The document never needs remote resources; refuse any URL (no server-side fetches from user data)
+  pdfmake.setUrlAccessPolicy(() => false)
 
   const fmt = (v: unknown) => v != null ? String(v) : '—'
   const money = (v: unknown) => v != null ? `$${Number(v).toLocaleString()}` : '—'
@@ -83,17 +86,7 @@ export default defineEventHandler(async (event) => {
     },
   }
 
-  const pdfDoc = printer.createPdfKitDocument(docDef)
-  const chunks: Buffer[] = []
-
-  await new Promise<void>((resolve, reject) => {
-    pdfDoc.on('data', (chunk: Buffer) => chunks.push(chunk))
-    pdfDoc.on('end', resolve)
-    pdfDoc.on('error', reject)
-    pdfDoc.end()
-  })
-
-  const buffer = Buffer.concat(chunks)
+  const buffer: Buffer = await pdfmake.createPdf(docDef).getBuffer()
 
   setHeader(event, 'Content-Type', 'application/pdf')
   setHeader(event, 'Content-Disposition', `attachment; filename="business-${id}.pdf"`)

@@ -29,6 +29,11 @@ model User {
   interactions        Interaction[]
   completed_steps     NextStep[]    @relation("StepCompletedBy")
   created_steps       NextStep[]    @relation("StepCreatedBy")
+  created_forms       Form[]        @relation("FormCreatedBy")
+  published_versions  FormVersion[] @relation("FormVersionPublishedBy")
+  form_requests       FormRequest[]
+  edited_notes        BusinessNote[] @relation("BusinessNoteEditor")
+  created_chats       AiChat[]       @relation("AiChatCreatedBy")
 
   @@map("users")
 }
@@ -52,6 +57,9 @@ model Business {
   follow_up_date       DateTime? @db.Date
   follow_up_note       String?
   is_archived          Boolean   @default(false)
+  // AI summary of the company's documents (mficrm-b6g.5): Markdown from Claude, and when it was made
+  ai_summary           String?
+  ai_summary_at        DateTime? @db.Timestamptz(3)
 
   assignee        User?           @relation("BusinessAssignee", fields: [assigned_to], references: [id], onDelete: SetNull)
   business_case   BusinessCase?
@@ -62,6 +70,11 @@ model Business {
   interactions    Interaction[]
   attachments     Attachment[]
   next_steps      NextStep[]
+
+  form_requests FormRequest[]
+  forms         Form[]
+  notes         BusinessNote?
+  ai_chats      AiChat[]
 
   @@index([is_archived, stage])
   @@map("businesses")
@@ -169,19 +182,24 @@ model Interaction {
 }
 
 model Attachment {
-  id             Int      @id @default(autoincrement())
-  interaction_id Int?
-  business_id    Int
-  filename       String   @unique
-  original_name  String
-  mime_type      String?
-  file_size      Int?
-  uploaded_at    DateTime @default(now()) @db.Timestamptz(3)
+  id                 Int      @id @default(autoincrement())
+  interaction_id     Int?
+  // Null for files uploaded through a form link that isn't tied to a business
+  business_id        Int?
+  // Set for files uploaded with a form submission (mficrm-xln.5)
+  form_submission_id Int?
+  filename           String   @unique
+  original_name      String
+  mime_type          String?
+  file_size          Int?
+  uploaded_at        DateTime @default(now()) @db.Timestamptz(3)
 
-  interaction Interaction? @relation(fields: [interaction_id], references: [id], onDelete: Cascade)
-  business    Business     @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  interaction     Interaction?    @relation(fields: [interaction_id], references: [id], onDelete: Cascade)
+  business        Business?       @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  form_submission FormSubmission? @relation(fields: [form_submission_id], references: [id], onDelete: Cascade)
 
   @@index([interaction_id])
+  @@index([form_submission_id])
   @@map("attachments")
 }
 
@@ -210,4 +228,130 @@ model NextStep {
   @@index([business_id, is_primary, status])
   @@index([parent_id])
   @@map("next_steps")
+}
+
+// Forms built in the CRM and sent to people outside it (public-forms epic, mficrm-xln). The working copy is
+// draft_schema; publishing snapshots it into a new, immutable form_versions row, so earlier versions (and anything
+// submitted against them) stay intact. Schemas are JSON in the FormSchema shape (app/shared/forms.ts).
+model Form {
+  id           Int           @id @default(autoincrement())
+  name         String
+  description  String?
+  status       String        @default("draft") // draft | published | archived
+  draft_schema Json          @default("{\"fields\": []}")
+  // Set when the form was made for one company (e.g. drafted by Claude from its documents, mficrm-b6g.7)
+  business_id  Int?
+  created_by   Int?
+  created_at   DateTime      @default(now()) @db.Timestamptz(3)
+  updated_at   DateTime      @default(now()) @db.Timestamptz(3)
+  creator      User?         @relation("FormCreatedBy", fields: [created_by], references: [id], onDelete: SetNull)
+  business     Business?     @relation(fields: [business_id], references: [id], onDelete: SetNull)
+  versions     FormVersion[]
+  requests     FormRequest[]
+
+  @@map("forms")
+}
+
+model FormVersion {
+  id           Int           @id @default(autoincrement())
+  form_id      Int
+  version      Int
+  schema       Json
+  published_by Int?
+  published_at DateTime      @default(now()) @db.Timestamptz(3)
+  form         Form          @relation(fields: [form_id], references: [id], onDelete: Cascade)
+  publisher    User?         @relation("FormVersionPublishedBy", fields: [published_by], references: [id], onDelete: SetNull)
+  requests     FormRequest[]
+
+  @@unique([form_id, version])
+  @@map("form_versions")
+}
+
+// A link sent to someone outside the CRM to fill in one published form version (mficrm-xln.4). Only the SHA-256
+// hash of the token is stored; the raw token exists in the URL /f/<token> alone. "expired" is not stored: a sent or
+// opened request past expires_at is reported as expired.
+model FormRequest {
+  id              Int             @id @default(autoincrement())
+  form_id         Int
+  form_version_id Int
+  business_id     Int?
+  recipient_name  String?
+  recipient_email String?
+  token_hash      String          @unique
+  status          String          @default("sent") // sent | opened | submitted | revoked
+  expires_at      DateTime        @db.Timestamptz(3)
+  emailed_at      DateTime?       @db.Timestamptz(3)
+  opened_at       DateTime?       @db.Timestamptz(3)
+  submitted_at    DateTime?       @db.Timestamptz(3)
+  revoked_at      DateTime?       @db.Timestamptz(3)
+  created_by      Int?
+  created_at      DateTime        @default(now()) @db.Timestamptz(3)
+  form            Form            @relation(fields: [form_id], references: [id], onDelete: Cascade)
+  form_version    FormVersion     @relation(fields: [form_version_id], references: [id], onDelete: Cascade)
+  business        Business?       @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  creator         User?           @relation(fields: [created_by], references: [id], onDelete: SetNull)
+  submission      FormSubmission?
+
+  @@index([form_id])
+  @@index([business_id])
+  @@map("form_requests")
+}
+
+// The answers sent through a form link (mficrm-xln.5). One per link: the link locks once submitted. Answers are keyed
+// by field id of the link's form version; file answers hold stored filenames (see attachments.form_submission_id).
+model FormSubmission {
+  id              Int          @id @default(autoincrement())
+  form_request_id Int          @unique
+  answers         Json
+  submitted_at    DateTime     @default(now()) @db.Timestamptz(3)
+  ip              String?
+  user_agent      String?
+  form_request    FormRequest  @relation(fields: [form_request_id], references: [id], onDelete: Cascade)
+  attachments     Attachment[]
+
+  @@map("form_submissions")
+}
+
+// The company's shared rich-text notes (mficrm-bwv.1): sanitised Tiptap HTML. `version` goes up on every save;
+// a save based on an older version is refused (409), so two people editing don't overwrite each other.
+model BusinessNote {
+  id          Int       @id @default(autoincrement())
+  business_id Int       @unique
+  content     String    @default("")
+  version     Int       @default(0)
+  updated_at  DateTime  @default(now()) @db.Timestamptz(3)
+  updated_by  Int?
+  business    Business  @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  editor      User?     @relation("BusinessNoteEditor", fields: [updated_by], references: [id], onDelete: SetNull)
+
+  @@map("business_notes")
+}
+
+// Conversations with Claude about a company (mficrm-bwv.2), shared with the team. `messages` is a JSON array of
+// { role: 'user' | 'assistant', text, at, user_id?, username?, error? }.
+model AiChat {
+  id          Int      @id @default(autoincrement())
+  business_id Int
+  title       String
+  messages    Json     @default("[]")
+  created_by  Int?
+  created_at  DateTime @default(now()) @db.Timestamptz(3)
+  updated_at  DateTime @default(now()) @db.Timestamptz(3)
+  business    Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  creator     User?    @relation("AiChatCreatedBy", fields: [created_by], references: [id], onDelete: SetNull)
+
+  @@index([business_id, updated_at])
+  @@map("ai_chats")
+}
+
+// Team-wide saved prompts for the company chat (mficrm-bwv.3). Text may use {{placeholders}}.
+model AiPrompt {
+  id         Int      @id @default(autoincrement())
+  name       String
+  text       String
+  rank       Int      @default(0)
+  created_at DateTime @default(now()) @db.Timestamptz(3)
+  updated_at DateTime @default(now()) @db.Timestamptz(3)
+
+  @@map("ai_prompts")
 }

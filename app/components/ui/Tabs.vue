@@ -17,19 +17,20 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 <template>
   <div>
     <div class="border-b border-border">
-      <nav class="flex -mb-px space-x-1 overflow-x-auto">
+      <nav class="flex -mb-px overflow-x-auto">
         <button
           v-for="tab in tabs"
           :key="tab.id"
           :class="[
-            'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors',
+            'flex items-center gap-1.5 px-3 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors',
             modelValue === tab.id
               ? 'border-primary text-primary'
               : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
           ]"
           @click="emit('update:modelValue', tab.id)"
         >
-          <Icon v-if="tab.icon" :name="tab.icon" class="h-4 w-4" />
+          <!-- Icons only on wide screens, so long tab rows fit without scrolling -->
+          <Icon v-if="tab.icon" :name="tab.icon" class="h-4 w-4 hidden 2xl:block" />
           {{ tab.label }}
         </button>
       </nav>

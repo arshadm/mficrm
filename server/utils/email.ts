@@ -1,15 +1,26 @@
 import nodemailer from 'nodemailer'
 import { prisma } from '../db/prisma'
+import { escapeHtml } from './html'
 
+// Production sends through Google (smtp.gmail.com:587 with a Workspace App Password; see docs/deploy.md).
+// Port 465 uses implicit TLS; any other port must upgrade with STARTTLS, so credentials never go out in clear.
 function getTransporter() {
+  const port = parseInt(process.env.SMTP_PORT || '587')
   return nodemailer.createTransport({
     host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587'),
+    port,
+    secure: port === 465,
+    requireTLS: port !== 465,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
   })
+}
+
+/** Email is optional: without SMTP_HOST, reminders are skipped (e.g. in development). */
+export function emailConfigured(): boolean {
+  return Boolean(process.env.SMTP_HOST)
 }
 
 interface FollowUp {
@@ -30,6 +41,10 @@ interface NextStepDue {
 }
 
 export async function sendFollowUpReminders() {
+  if (!emailConfigured()) {
+    console.log('[email] SMTP_HOST not set, skipping follow-up reminders')
+    return
+  }
   const today = new Date().toISOString().split('T')[0]
   const todayDate = new Date(`${today}T00:00:00Z`)
   const appUrl = process.env.APP_URL || 'http://localhost:3000'
@@ -123,4 +138,42 @@ export async function sendFollowUpReminders() {
       console.error(`[Email] Failed to send digest to ${email}:`, err)
     }
   }
+}
+
+/** Emails a form link (mficrm-xln.4). Throws if sending fails, so the caller can report it. */
+export async function sendFormLinkEmail(opts: {
+  to: string
+  recipientName?: string | null
+  formName: string
+  description?: string | null
+  message?: string | null
+  url: string
+  expiresAt: Date
+  senderName: string
+}) {
+  if (!emailConfigured()) throw createError({ statusCode: 400, message: 'Email is not configured (SMTP_HOST)' })
+  const from = process.env.SMTP_FROM || 'crm@acquiredesk.com'
+  const expires = opts.expiresAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+  const greeting = opts.recipientName ? `Hello ${opts.recipientName},` : 'Hello,'
+  const paragraphs = (text: string) => text.split(/\n{2,}/).map(p => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`).join('')
+
+  await getTransporter().sendMail({
+    from,
+    to: opts.to,
+    subject: opts.formName,
+    text: [
+      greeting, '',
+      opts.message || `${opts.senderName} has asked you to fill in "${opts.formName}".`, '',
+      opts.url, '',
+      `The link works once and expires on ${expires}. Please don't forward it.`,
+    ].join('\n'),
+    html: `
+      <div style="font-family:system-ui,sans-serif;max-width:560px;color:#111">
+        <p>${escapeHtml(greeting)}</p>
+        ${opts.message ? paragraphs(opts.message) : `<p>${escapeHtml(opts.senderName)} has asked you to fill in <strong>${escapeHtml(opts.formName)}</strong>.</p>`}
+        ${opts.description ? `<p style="color:#555">${escapeHtml(opts.description)}</p>` : ''}
+        <p><a href="${escapeHtml(opts.url)}" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">Open the form</a></p>
+        <p style="color:#555;font-size:13px">The link works once and expires on ${escapeHtml(expires)}. Please don't forward it.</p>
+      </div>`,
+  })
 }

@@ -1,4 +1,5 @@
 import { idParam, orNotFound, prisma } from '../../../db/prisma'
+import { sanitizeRichText } from '../../../utils/html'
 import { ValuationSchema } from '~/shared/schemas'
 
 export default defineEventHandler(async (event) => {
@@ -19,7 +20,7 @@ export default defineEventHandler(async (event) => {
     initial_offer: d.initial_offer ?? null,
     max_offer: d.max_offer ?? null,
     final_offer_made: d.final_offer_made ?? null,
-    offer_notes: d.offer_notes ?? null,
+    offer_notes: sanitizeRichText(d.offer_notes ?? null),
   }
   return orNotFound(
     prisma.valuation.upsert({ where: { business_id }, create: { business_id, ...data }, update: data }),

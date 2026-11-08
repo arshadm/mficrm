@@ -1,21 +1,33 @@
 import { prisma, toDate } from './prisma'
 import { hashUserPassword as hashPassword } from '../utils/auth'
 
+const DEFAULT_PASSWORD = 'changeme'
+
+/**
+ * Runs on every boot. Creates the admin user if it's missing. Outside production it also fills an empty database
+ * with sample businesses (or anywhere, with SEED_SAMPLE_DATA=1).
+ */
 export async function seedDatabase() {
-  // Seed admin user
+  const production = process.env.NODE_ENV === 'production'
   const adminUsername = process.env.ADMIN_USERNAME || 'admin'
-  const adminPassword = process.env.ADMIN_PASSWORD || 'changeme'
+  const adminPassword = process.env.ADMIN_PASSWORD || (production ? '' : DEFAULT_PASSWORD)
 
   let admin = await prisma.user.findUnique({ where: { username: adminUsername }, select: { id: true } })
   if (!admin) {
+    // Never create a production admin with a missing or default password
+    if (production && (!adminPassword || adminPassword === DEFAULT_PASSWORD)) {
+      console.error(`[seed] Not creating admin user "${adminUsername}": set a non-default ADMIN_PASSWORD`)
+      return
+    }
     admin = await prisma.user.create({
       data: { username: adminUsername, password_hash: await hashPassword(adminPassword), email: 'admin@acquiredesk.com', role: 'admin' },
       select: { id: true },
     })
   }
 
-  // Sample data only into an empty database
-  if (await prisma.business.count()) return
+  // Sample data only into an empty database, and not in production unless asked for
+  const wantSamples = process.env.SEED_SAMPLE_DATA ? process.env.SEED_SAMPLE_DATA === '1' : !production
+  if (!wantSamples || await prisma.business.count()) return
 
   const followUp = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 

@@ -52,6 +52,7 @@ onMounted(fetchUsers)
 
 <template>
   <div class="p-6 max-w-2xl space-y-4">
+    <SettingsNav />
     <div class="flex items-center justify-between">
       <div>
         <h1 class="text-2xl font-bold">User Management</h1>

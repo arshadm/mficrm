@@ -33,9 +33,16 @@ ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 UPLOAD_DIR=/data/uploads
 COPY --from=build --chown=node:node /app /app
 # prisma and the other CLIs
 ENV PATH=/app/node_modules/.bin:$PATH
-# Uploads live on a persistent volume mounted at /data. A new named volume takes this directory's owner, so the
-# app (user node) can write to it.
-RUN mkdir -p /data/uploads && chown -R node:node /data
+# Claude Code CLI, run headless for the AI features (server/utils/ai.ts), signed in with the team's Claude
+# subscription. Pinned, with the auto-updater off, so the CLI only changes with the image. Its login lives in
+# CLAUDE_HOME on the persistent volume (config/deploy.yml); sign in once with
+# `npm run claude:login` from a checkout (docs/deploy.md).
+ARG CLAUDE_CODE_VERSION=2.1.319
+RUN npm install -g --no-audit --no-fund @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} && claude --version
+ENV DISABLE_AUTOUPDATER=1
+# Uploads (and the CLI's login) live on a persistent volume mounted at /data. A new named volume takes this
+# directory's owner, so the app (user node) can write to it.
+RUN mkdir -p /data/uploads /data/claude-home && chown -R node:node /data
 USER node
 EXPOSE 3000
 ENTRYPOINT ["/app/bin/docker-entrypoint"]

@@ -52,10 +52,15 @@ env:
     # Login rate limits read the visitor IP from Cloudflare (server/utils/loginRateLimit.ts). Safe only while the
     # firewall lets nothing but Cloudflare reach ports 80/443.
     TRUSTED_IP_HEADER: cf-connecting-ip
-    # TODO: SMTP server and sender for the 08:00 follow-up reminder emails
-    SMTP_HOST: smtp.example.com
+    # Reminder emails go through Google: SMTP_USER is the Workspace account, SMTP_PASS an App Password for it.
+    # SMTP_FROM must be that account or a verified "Send mail as" alias, or Google rewrites the From address.
+    SMTP_HOST: smtp.gmail.com
     SMTP_PORT: "587"
     SMTP_FROM: AcquireDesk <crm@mfitrading.co.uk>
+    # AI assistance runs the Claude Code CLI signed in with the team's Claude subscription (server/utils/ai.ts).
+    # Its login is kept on the volume; until an admin signs it in (docs/deploy.md), the AI buttons are hidden.
+    CLAUDE_MODEL: claude-sonnet-5-5
+    CLAUDE_HOME: /data/claude-home
   secret:
     - DATABASE_URL
     - NUXT_SESSION_PASSWORD
@@ -77,11 +82,54 @@ accessories:
     directories:
       - data:/var/lib/postgresql/data
 
+  # Nightly pg_dump to the R2 bucket under db/, kept 35 days (same as stepwise). Restore: docs/deploy.md ("Backups").
+  backups:
+    image: eeshugerman/postgres-backup-s3:16
+    host: 46.62.237.88
+    env:
+      clear:
+        SCHEDULE: '@daily'
+        BACKUP_KEEP_DAYS: 35
+        POSTGRES_HOST: mficrm-db
+        POSTGRES_DATABASE: mficrm
+        POSTGRES_USER: mficrm
+        S3_BUCKET: mficrm-backups
+        S3_PREFIX: db
+        S3_REGION: auto
+      secret:
+        - POSTGRES_PASSWORD
+        - S3_ENDPOINT
+        - S3_ACCESS_KEY_ID
+        - S3_SECRET_ACCESS_KEY
+
+  # Nightly tarball of the uploads volume (read-only) to the same bucket under uploads/, kept 35 days
+  uploads-backup:
+    image: offen/docker-volume-backup:v2.43.0
+    host: 46.62.237.88
+    env:
+      clear:
+        BACKUP_CRON_EXPRESSION: '30 2 * * *'
+        BACKUP_RETENTION_DAYS: 35
+        BACKUP_FILENAME: uploads-%Y-%m-%dT%H-%M-%S.tar.gz
+        BACKUP_PRUNING_PREFIX: uploads-
+        AWS_S3_BUCKET_NAME: mficrm-backups
+        AWS_S3_PATH: uploads
+        # The Claude CLI's login is on the same volume; keep credentials out of the backups (sign in again instead)
+        BACKUP_EXCLUDE_REGEXP: '/claude-home/'
+      secret:
+        - AWS_ENDPOINT
+        - AWS_ACCESS_KEY_ID
+        - AWS_SECRET_ACCESS_KEY
+    volumes:
+      - mficrm_data:/backup/data:ro
+
 aliases:
   logs: app logs -f
   shell: app exec --interactive --reuse "bash"
   migrate: app exec --reuse "prisma migrate deploy"
   psql: accessory exec db --interactive --reuse "psql -U mficrm mficrm"
+  backup-now: accessory exec backups --reuse "sh backup.sh"
+  backup-uploads-now: accessory exec uploads-backup --reuse "backup"
 
 registry:
   server: registry.hub.docker.com

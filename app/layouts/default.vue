@@ -8,6 +8,7 @@ const navItems = [
   { to: '/calendar', icon: 'lucide:calendar-days', label: 'Calendar' },
   { to: '/pipeline', icon: 'lucide:kanban', label: 'Pipeline' },
   { to: '/businesses', icon: 'lucide:briefcase', label: 'Businesses' },
+  { to: '/forms', icon: 'lucide:clipboard-list', label: 'Forms' },
   { to: '/settings/users', icon: 'lucide:settings', label: 'Settings' },
 ]
 

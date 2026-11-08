@@ -27,7 +27,7 @@ AcquireDesk deploys with [Kamal 2](https://kamal-deploy.org), the same way as st
 2. **Settle the TODOs in `config/deploy.yml`:**
    - **Host:** it uses the spinorml/stepwise host, `46.62.237.88`, which already runs kamal-proxy. The server needs a `kamal` user that can SSH in with your key and is in the `docker` group.
    - **Domain:** `proxy.hosts` and `APP_URL`.
-   - **SMTP:** `SMTP_HOST`, `SMTP_PORT` and `SMTP_FROM`.
+   - **SMTP:** `SMTP_HOST` (`smtp.gmail.com`), `SMTP_PORT` (`587`, STARTTLS required) and `SMTP_FROM`. `SMTP_FROM` must be the sending Google account or a verified "Send mail as" alias.
 3. **Cloudflare and HTTPS** (Full (strict)), as for stepwise (see its `docs/runbooks/deploy.md` for the detailed steps):
    - **DNS:** an A record for the domain pointing at the server, proxied (orange cloud).
    - **Origin certificate:** create one in _SSL/TLS → Origin Server_ for the domain. Store the certificate and key in the `mficrm-prod` Bitwarden item, in the fields `ORIGIN_CERTIFICATE_B64` and `ORIGIN_PRIVATE_KEY_B64`. Base64-encoding them first is the most reliable:
@@ -41,12 +41,18 @@ AcquireDesk deploys with [Kamal 2](https://kamal-deploy.org), the same way as st
    - `POSTGRES_PASSWORD`: `openssl rand -hex 24`. It must be URL-safe, because `.kamal/secrets` builds `DATABASE_URL` from it.
    - `NUXT_SESSION_PASSWORD`: `openssl rand -hex 32`. Changing it logs everyone out.
    - `ADMIN_PASSWORD`: a strong password. It is only used to create the admin user on the first boot; change it in the app afterwards.
-   - `SMTP_USER`, `SMTP_PASS`: the SMTP login for reminder emails.
+   - `SMTP_USER`, `SMTP_PASS`: the Google Workspace account that sends reminder emails (e.g. `crm@mfitrading.co.uk`) and an **App Password** for it, not its normal password. App Passwords need 2-Step Verification on the account: Google Account → Security → 2-Step Verification → App passwords.
    - `ORIGIN_CERTIFICATE_B64`, `ORIGIN_PRIVATE_KEY_B64`: from step 3.
+   - `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`: the R2 backup bucket (see "Backups").
 
    Check they resolve with `kamal secrets print`.
-5. **First deploy:** run `kamal setup`. It installs Docker if needed, boots the `db` accessory, creates the `mficrm_data` volume, builds and pushes the image, and starts the app behind the shared kamal-proxy. The app applies every migration on its first boot.
-6. Check `https://<domain>/api/health` returns `{"status":"ok"}`, then log in as `admin`. The first boot also seeds three sample businesses; delete them in the app.
+5. **First deploy:** run `kamal setup`. It installs Docker if needed, boots the `db` and backup accessories, creates the `mficrm_data` volume, builds and pushes the image, and starts the app behind the shared kamal-proxy. The app applies every migration on its first boot.
+6. Check `https://<domain>/api/health` returns `{"status":"ok"}`, then log in as `admin`. Production starts with an empty pipeline: sample businesses are only seeded in development, or when `SEED_SAMPLE_DATA=1`. If `ADMIN_PASSWORD` is missing or `changeme`, no admin is created and the log says so.
+7. **Sign in Claude** (for the AI features). The image includes the Claude Code CLI; sign it in once with the team's Claude account:
+   ```bash
+   npm run claude:login   # = kamal app exec -i --reuse "env HOME=/data/claude-home claude auth login --claudeai"
+   ```
+   It prints a link: open it on any device, sign in, and paste the code back. The `HOME` matters: the app runs the CLI with `CLAUDE_HOME=/data/claude-home` (`config/deploy.yml`), on the persistent volume, so the login survives deploys. A login made without it is invisible to the app and lost on the next deploy. Then press **Check now** under Settings → Claude. Until then the AI buttons are hidden. Sign in again the same way if that page ever says "Not signed in". The login is excluded from the uploads backup, so after restoring the volume, sign in again.
 
 ## Every release
 
@@ -66,6 +72,8 @@ Each release is built from the current git commit. Kamal starts the new containe
 | `kamal migrate` | Apply migrations without a deploy (rarely needed) |
 | `kamal rollback <version>` | Go back to an earlier image (`kamal app versions` lists them) |
 | `kamal app boot` | Restart the app, e.g. after changing a secret |
+| `npm run claude:login` | Sign the Claude CLI in (or in again) |
+| `npm run claude:status` | Is the Claude CLI signed in? |
 
 **Locked out?** After 5 failed logins for a username, or 20 from one IP, logins are refused for 15 minutes. The counters live in memory, so `kamal app boot` clears them immediately. They're keyed on Cloudflare's `cf-connecting-ip` header (`TRUSTED_IP_HEADER`), which is only trustworthy while the firewall admits nothing but Cloudflare on ports 80 and 443.
 
@@ -73,15 +81,32 @@ A changed secret or setting only reaches the container on the next `kamal deploy
 
 ## Backups
 
-There is no automatic backup yet (tracked in `mficrm-675`). To take one by hand:
+Two accessories back up to the Cloudflare R2 bucket `mficrm-backups` every night, and each keeps 35 days:
+
+- `backups` (`eeshugerman/postgres-backup-s3`) writes a `pg_dump` in custom format under `db/`.
+- `uploads-backup` (`offen/docker-volume-backup`) writes a tarball of the `mficrm_data` volume under `uploads/` at 02:30. It mounts the volume read-only.
+
+**One-time setup.**
+
+1. In Cloudflare R2, create the bucket `mficrm-backups`.
+2. Create an R2 API token with **Object Read & Write** on that bucket only.
+3. Add three fields to the Bitwarden item `mficrm-prod`:
+   - `S3_ENDPOINT`: `https://<account id>.r2.cloudflarestorage.com`
+   - `S3_ACCESS_KEY_ID`
+   - `S3_SECRET_ACCESS_KEY`
+4. Boot the accessories: `kamal accessory boot backups` and `kamal accessory boot uploads-backup`. A first `kamal setup` boots them automatically.
+
+**Take a backup now:** `kamal backup-now` (database) or `kamal backup-uploads-now` (uploads).
+
+**Restore the database.**
+
+1. Download a dump from R2, then copy it in: `scp mficrm_….dump kamal@46.62.237.88:` and `ssh kamal@46.62.237.88 'docker cp mficrm_….dump mficrm-db:/tmp/restore.dump'`.
+2. Stop the app: `kamal app stop`.
+3. Restore: `kamal accessory exec db --reuse "pg_restore --clean --if-exists -U mficrm -d mficrm /tmp/restore.dump"`.
+4. Start the app: `kamal app boot`.
+
+**Restore uploads.** Download the tarball. Its files are under `backup/data/` in the archive. Unpack it into the volume:
 
 ```bash
-# Database: a pg_dump in custom format, copied to your machine
-kamal accessory exec db --reuse "pg_dump -U mficrm -Fc mficrm -f /tmp/mficrm.dump"
-ssh kamal@46.62.237.88 'docker cp mficrm-db:/tmp/mficrm.dump .' && scp kamal@46.62.237.88:mficrm.dump .
-
-# Uploads
-ssh kamal@46.62.237.88 'docker run --rm -v mficrm_data:/data -v $PWD:/out alpine tar czf /out/uploads.tgz -C /data uploads'
+ssh kamal@46.62.237.88 'docker run --rm -v mficrm_data:/data -v $PWD:/in alpine tar xzf /in/uploads-….tar.gz -C /data --strip-components=2'
 ```
-
-Restore a dump with `pg_restore --clean --if-exists -U mficrm -d mficrm` while the app is stopped (`kamal app stop`).

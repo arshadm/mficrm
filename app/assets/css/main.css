@@ -96,3 +96,35 @@
 .rich-text em { @apply italic; }
 .rich-text code { @apply bg-muted px-1 rounded font-mono text-sm; }
 .rich-text a { @apply text-primary underline; }
+
+/* Company notes (NotesEditor.vue) and chat answers (ChatPanel.vue): shared prose styles */
+.notes-content, .chat-answer { @apply text-sm leading-relaxed; }
+.notes-content > * + *, .chat-answer > * + * { @apply mt-2; }
+.notes-content h1, .chat-answer h1 { @apply text-xl font-bold mt-4; }
+.notes-content h2, .chat-answer h2 { @apply text-lg font-semibold mt-3; }
+.notes-content h3, .chat-answer h3 { @apply text-base font-semibold mt-2; }
+.notes-content ul, .chat-answer ul { @apply list-disc pl-5; }
+.notes-content ol, .chat-answer ol { @apply list-decimal pl-5; }
+.notes-content li > p, .chat-answer li > p { @apply my-0; }
+.notes-content blockquote, .chat-answer blockquote { @apply border-l-4 border-border pl-3 text-muted-foreground; }
+.notes-content code, .chat-answer code { @apply bg-muted px-1 rounded font-mono text-[0.85em]; }
+.notes-content pre, .chat-answer pre { @apply bg-muted p-3 rounded font-mono text-xs overflow-x-auto; }
+.notes-content pre code, .chat-answer pre code { @apply bg-transparent p-0; }
+.notes-content a, .chat-answer a { @apply text-primary underline underline-offset-2; }
+.notes-content hr, .chat-answer hr { @apply border-border my-4; }
+.notes-content img { @apply max-w-full h-auto rounded border border-border; }
+.notes-content img.ProseMirror-selectednode { @apply ring-2 ring-primary; }
+.notes-content table, .chat-answer table { @apply w-full border-collapse text-xs my-2; }
+.notes-content th, .notes-content td, .chat-answer th, .chat-answer td { @apply border border-border px-2 py-1 align-top text-left; }
+.notes-content th, .chat-answer th { @apply bg-muted font-semibold; }
+.notes-content .selectedCell { @apply bg-primary/10; }
+.notes-content .tableWrapper { @apply overflow-x-auto; }
+.notes-content ul[data-type="taskList"] { @apply list-none pl-0; }
+.notes-content ul[data-type="taskList"] li { @apply flex items-start gap-2; }
+.notes-content ul[data-type="taskList"] li > label { @apply mt-0.5 shrink-0; }
+.notes-content ul[data-type="taskList"] li > div { @apply flex-1; }
+.notes-content ul[data-type="taskList"] li[data-checked="true"] > div { @apply line-through text-muted-foreground; }
+.notes-content p.is-editor-empty:first-child::before {
+  @apply text-muted-foreground pointer-events-none float-left h-0;
+  content: attr(data-placeholder);
+}

@@ -1,4 +1,5 @@
 import { idParam, orNotFound, prisma } from '../../../db/prisma'
+import { sanitizeRichText } from '../../../utils/html'
 import { GrowthPlanSchema } from '~/shared/schemas'
 
 export default defineEventHandler(async (event) => {
@@ -12,11 +13,11 @@ export default defineEventHandler(async (event) => {
 
   const d = parsed.data
   const data = {
-    year1_goals: d.year1_goals ?? null,
-    year2_goals: d.year2_goals ?? null,
-    marketing_strategy: d.marketing_strategy ?? null,
-    product_roadmap: d.product_roadmap ?? null,
-    team_requirements: d.team_requirements ?? null,
+    year1_goals: sanitizeRichText(d.year1_goals ?? null),
+    year2_goals: sanitizeRichText(d.year2_goals ?? null),
+    marketing_strategy: sanitizeRichText(d.marketing_strategy ?? null),
+    product_roadmap: sanitizeRichText(d.product_roadmap ?? null),
+    team_requirements: d.team_requirements ?? null, // plain text (textarea), never rendered as HTML
   }
   return orNotFound(
     prisma.growthPlan.upsert({ where: { business_id }, create: { business_id, ...data }, update: data }),
