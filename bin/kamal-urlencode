@@ -1,0 +1,29 @@
+#!/usr/bin/env ruby
+# Fetches one secret and prints it percent-encoded for use inside a URL. For .kamal/secrets: the database password
+# goes into DATABASE_URL, where characters such as / @ # ? : would otherwise break it (Prisma: "invalid port number
+# in database URL").
+#
+#   bin/kamal-urlencode --adapter bitwarden --account ACCOUNT --from ITEM NAME
+#
+# It takes `kamal secrets fetch` arguments and fetches the secret itself, because Kamal pastes $VARIABLES into the
+# command text and runs it through the shell, so a password containing $ ( ) ` or " can't be passed in safely.
+require "erb"
+require "json"
+require "open3"
+
+*fetch_args, name = ARGV
+abort "\n*** usage: bin/kamal-urlencode --adapter ADAPTER [--account ACCOUNT] [--from FROM] NAME\n\n" if name.to_s.empty? || fetch_args.empty?
+
+out, status = Open3.capture2("kamal", "secrets", "fetch", *fetch_args, name)
+abort "\n*** #{name}: kamal secrets fetch failed\n\n" unless status.success?
+
+parsed = begin
+  JSON.parse(out.lines.last.to_s)
+rescue JSON::ParserError
+  abort "\n*** #{name}: unexpected output from kamal secrets fetch\n\n"
+end
+value = parsed[name] || parsed.find { |key, _| key.end_with?("/#{name}") }&.last
+abort "\n*** #{name}: not found\n\n" if value.nil?
+abort "\n*** #{name}: is empty\n\n" if value.empty?
+
+print ERB::Util.url_encode(value)

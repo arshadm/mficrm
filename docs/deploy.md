@@ -7,6 +7,7 @@ AcquireDesk deploys with [Kamal 2](https://kamal-deploy.org), the same way as st
 - `Dockerfile`: the image build
 - `bin/docker-entrypoint`: how the container starts
 - `bin/kamal-pem`: rebuilds the Cloudflare origin certificate and key from Bitwarden fields
+- `bin/kamal-urlencode`: percent-encodes the database password for `DATABASE_URL`
 
 **What runs on the server** (one host, behind kamal-proxy, with Cloudflare in front and HTTPS on both legs):
 
@@ -38,7 +39,7 @@ AcquireDesk deploys with [Kamal 2](https://kamal-deploy.org), the same way as st
      If the host already has a wildcard origin certificate covering this domain, reuse it.
    - **SSL/TLS mode:** _Full (strict)_. The host firewall should already allow ports 80 and 443 only from Cloudflare.
 4. **Secrets:** create a Bitwarden item `mficrm-prod` with these fields:
-   - `POSTGRES_PASSWORD`: `openssl rand -hex 24`. It must be URL-safe, because `.kamal/secrets` builds `DATABASE_URL` from it.
+   - `POSTGRES_PASSWORD`: e.g. `openssl rand -hex 24`. Any characters work: `.kamal/secrets` percent-encodes it for `DATABASE_URL` (`bin/kamal-urlencode`). Once Postgres has started for the first time, changing this field doesn't change the database's password: run `ALTER USER mficrm PASSWORD '…'` in `kamal psql` first.
    - `NUXT_SESSION_PASSWORD`: `openssl rand -hex 32`. Changing it logs everyone out.
    - `ADMIN_PASSWORD`: a strong password. It is only used to create the admin user on the first boot; change it in the app afterwards.
    - `SMTP_USER`, `SMTP_PASS`: the Google Workspace account that sends reminder emails (e.g. `crm@mfitrading.co.uk`) and an **App Password** for it, not its normal password. App Passwords need 2-Step Verification on the account: Google Account → Security → 2-Step Verification → App passwords.
