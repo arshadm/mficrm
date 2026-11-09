@@ -25,5 +25,8 @@ end
 value = parsed[name] || parsed.find { |key, _| key.end_with?("/#{name}") }&.last
 abort "\n*** #{name}: not found\n\n" if value.nil?
 abort "\n*** #{name}: is empty\n\n" if value.empty?
+# Kamal writes secrets into the containers' env files with backslashes doubled (Kamal::EnvFile), so Postgres would
+# get a different password from the one in this URL
+abort "\n*** #{name}: contains a backslash, which Kamal doubles in the containers' env files. Use a password without \\ (e.g. openssl rand -hex 24).\n\n" if value.include?("\\")
 
 print ERB::Util.url_encode(value)
