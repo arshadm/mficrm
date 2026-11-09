@@ -9,11 +9,20 @@ const form = reactive({ username: '', password: '' })
 const error = ref('')
 const loading = ref(false)
 
-async function handleLogin() {
+async function handleLogin(event: Event) {
   error.value = ''
+  // Read what's in the fields: a password manager's autofill, or typing before the page finished loading, can fill
+  // them without updating `form`
+  const data = new FormData(event.target as HTMLFormElement)
+  const username = String(data.get('username') ?? form.username).trim()
+  const password = String(data.get('password') ?? form.password)
+  if (!username || !password) {
+    error.value = 'Enter your username and password'
+    return
+  }
   loading.value = true
   try {
-    await authStore.login(form.username, form.password)
+    await authStore.login(username, password)
     // Back to the page the visitor originally asked for (same-site paths only)
     const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/') && !route.query.redirect.startsWith('//')
       ? route.query.redirect
@@ -40,10 +49,10 @@ async function handleLogin() {
 
       <form class="space-y-4" @submit.prevent="handleLogin">
         <FormField label="Username" required>
-          <Input v-model="form.username" placeholder="admin" autocomplete="username" />
+          <Input v-model="form.username" name="username" placeholder="admin" autocomplete="username" />
         </FormField>
         <FormField label="Password" required>
-          <Input v-model="form.password" type="password" placeholder="••••••••" autocomplete="current-password" />
+          <Input v-model="form.password" name="password" type="password" placeholder="••••••••" autocomplete="current-password" />
         </FormField>
 
         <div v-if="error" class="rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2 text-sm text-destructive">

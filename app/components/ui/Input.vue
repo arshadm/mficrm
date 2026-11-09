@@ -6,6 +6,7 @@ interface Props {
   disabled?: boolean
   class?: string
   id?: string
+  name?: string
 }
 
 const props = withDefaults(defineProps<Props>(), { type: 'text' })
@@ -15,6 +16,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 <template>
   <input
     :id="id"
+    :name="name"
     :type="type"
     :value="modelValue ?? ''"
     :placeholder="placeholder"

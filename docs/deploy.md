@@ -7,7 +7,7 @@ AcquireDesk deploys with [Kamal 2](https://kamal-deploy.org), the same way as st
 - `Dockerfile`: the image build
 - `bin/docker-entrypoint`: how the container starts
 - `bin/kamal-pem`: rebuilds the Cloudflare origin certificate and key from Bitwarden fields
-- `bin/kamal-urlencode`: percent-encodes the database password for `DATABASE_URL`
+- `bin/kamal-reset`: wipes the deployment on the server and deploys it again from scratch (see "Starting over")
 
 **What runs on the server** (one host, behind kamal-proxy, with Cloudflare in front and HTTPS on both legs):
 
@@ -39,7 +39,7 @@ AcquireDesk deploys with [Kamal 2](https://kamal-deploy.org), the same way as st
      If the host already has a wildcard origin certificate covering this domain, reuse it.
    - **SSL/TLS mode:** _Full (strict)_. The host firewall should already allow ports 80 and 443 only from Cloudflare.
 4. **Secrets:** create a Bitwarden item `mficrm-prod` with these fields:
-   - `POSTGRES_PASSWORD`: e.g. `openssl rand -hex 24`. Any characters work: `.kamal/secrets` percent-encodes it for `DATABASE_URL` (`bin/kamal-urlencode`). Once Postgres has started for the first time, changing this field doesn't change the database's password: run `ALTER USER mficrm PASSWORD '…'` in `kamal psql` first.
+   - `POSTGRES_PASSWORD`: `openssl rand -hex 24`. Letters and digits only: it goes into `DATABASE_URL` as is, and Kamal doubles backslashes in the env files it writes. Postgres sets the password only when its data directory is first created, so changing this field later doesn't change the database's password: run `ALTER USER mficrm PASSWORD '…'` in `kamal psql` first (or start over, below).
    - `NUXT_SESSION_PASSWORD`: `openssl rand -hex 32`. Changing it logs everyone out.
    - `ADMIN_PASSWORD`: a strong password. It is only used to create the admin user on the first boot; change it in the app afterwards.
    - `SMTP_USER`, `SMTP_PASS`: the Google Workspace account that sends reminder emails (e.g. `crm@mfitrading.co.uk`) and an **App Password** for it, not its normal password. App Passwords need 2-Step Verification on the account: Google Account → Security → 2-Step Verification → App passwords.
@@ -111,3 +111,20 @@ Two accessories back up to the Cloudflare R2 bucket `mficrm-backups` every night
 ```bash
 ssh kamal@46.62.237.88 'docker run --rm -v mficrm_data:/data -v $PWD:/in alpine tar xzf /in/uploads-….tar.gz -C /data --strip-components=2'
 ```
+
+## Starting over
+
+`bin/kamal-reset` deletes the deployment on the server and deploys it again. Use it only while there's no data worth keeping (or after taking backups).
+
+1. **Checks first.** It runs `bw sync`, then checks the secrets: `POSTGRES_PASSWORD` must be letters and digits, and `DATABASE_URL` must match it.
+2. **Confirmation.** It asks you to type `mficrm`.
+3. **Deletes:**
+   - the app's containers and images
+   - `~/mficrm-db`, through a root container, because the postgres user owns it and plain `kamal accessory remove db` can't delete it
+   - the accessories
+   - the `mficrm_data` volume, which holds the uploads and the Claude login
+4. **Starts Postgres** and checks that it accepts its own password over TCP. It also compares SHA-256 hashes to confirm the password matches Bitwarden, without printing it.
+5. **Brings the rest back.** It boots the backup accessories, runs `kamal deploy`, and waits for the health check.
+
+kamal-proxy, other apps on the host and the R2 backups are left alone. Afterwards, log in as `admin`, and run `npm run claude:login`.
+

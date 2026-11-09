@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# Wipes the AcquireDesk deployment on the server and deploys it again from scratch. DESTRUCTIVE: deletes the
+# database (~/mficrm-db), the uploads volume (mficrm_data, which also holds the Claude CLI login), the app and
+# accessory containers and their images. It leaves alone kamal-proxy (shared with stepwise and the spinorml site),
+# the R2 backups and other apps on the host.
+#
+#   bin/kamal-reset
+#
+# Needs: kamal, bw (logged in), BW_SESSION and KAMAL_REGISTRY_PASSWORD exported, SSH access as kamal@HOST.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+HOST=46.62.237.88   # keep in step with config/deploy.yml
+SSH="ssh kamal@$HOST"
+
+step() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
+die() { printf '\n\033[31m*** %s\033[0m\n\n' "$*" >&2; exit 1; }
+sha() { shasum -a 256 | cut -d' ' -f1; }
+
+# --- Preflight ---------------------------------------------------------------------------------------------------
+step "Checking tools and secrets"
+command -v kamal >/dev/null || die "kamal is not installed (gem install kamal)"
+command -v bw >/dev/null || die "the Bitwarden CLI (bw) is not installed"
+[ -n "${BW_SESSION:-}" ] || die "BW_SESSION is not set: run  export BW_SESSION=\$(bw unlock --raw)"
+[ -n "${KAMAL_REGISTRY_PASSWORD:-}" ] || die "KAMAL_REGISTRY_PASSWORD is not set (Docker Hub token for artemissoft1)"
+$SSH true || die "can't SSH to kamal@$HOST"
+
+# Fresh copy of the vault, so the database and the app are given the same password
+bw sync >/dev/null
+
+secrets=$(kamal secrets print) || die "kamal secrets print failed"
+pg_password=$(printf '%s\n' "$secrets" | sed -n 's/^POSTGRES_PASSWORD=//p')
+database_url=$(printf '%s\n' "$secrets" | sed -n 's/^DATABASE_URL=//p')
+unset secrets
+[ -n "$pg_password" ] || die "POSTGRES_PASSWORD is empty"
+[[ "$pg_password" =~ ^[A-Za-z0-9]+$ ]] || die "POSTGRES_PASSWORD must contain only letters and digits (e.g. openssl rand -hex 24)"
+[ "$database_url" = "postgresql://mficrm:$pg_password@mficrm-db:5432/mficrm" ] || die "DATABASE_URL in .kamal/secrets doesn't match POSTGRES_PASSWORD"
+want_hash=$(printf '%s' "$pg_password" | sha)
+unset pg_password database_url
+echo "Secrets OK."
+
+# --- Confirm -------------------------------------------------------------------------------------------------------
+cat <<EOF
+
+This DELETES on $HOST:
+  - the database (~/mficrm-db) and the mficrm-db, mficrm-backups and mficrm-uploads-backup containers
+  - the uploads volume mficrm_data (uploaded files and the Claude CLI login)
+  - the mficrm-web containers and images
+kamal-proxy, other apps and the R2 backups are not touched.
+EOF
+read -r -p "Type mficrm to continue: " answer
+[ "$answer" = "mficrm" ] || die "Cancelled"
+
+# --- Clean ---------------------------------------------------------------------------------------------------------
+step "Removing the app"
+kamal app remove || true
+
+step "Removing the database's data directory (owned by the postgres user, so deleted through a root container)"
+$SSH 'docker rm -f mficrm-db >/dev/null 2>&1 || true
+      if [ -d "$HOME/mficrm-db" ]; then docker run --rm -v "$HOME:/h" alpine rm -rf /h/mficrm-db; fi
+      test ! -e "$HOME/mficrm-db"' || die "could not delete ~/mficrm-db"
+
+step "Removing the accessories"
+kamal accessory remove all -y || true
+
+step "Removing the uploads volume"
+$SSH 'docker ps -aq --filter volume=mficrm_data | xargs -r docker rm -f >/dev/null
+      docker volume rm mficrm_data >/dev/null 2>&1 || true
+      ! docker volume inspect mficrm_data >/dev/null 2>&1' || die "could not remove the mficrm_data volume"
+
+step "Checking nothing is left"
+left=$($SSH 'docker ps -a --format "{{.Names}}" | grep -E "^mficrm-" || true')
+[ -z "$left" ] || die "containers still present: $left"
+echo "Clean."
+
+# --- Recreate ------------------------------------------------------------------------------------------------------
+step "Starting Postgres"
+kamal accessory boot db
+for i in $(seq 1 60); do
+  if $SSH 'docker exec mficrm-db pg_isready -h 127.0.0.1 -U mficrm -d mficrm' >/dev/null 2>&1; then break; fi
+  [ "$i" = 60 ] && die "Postgres didn't become ready (kamal accessory logs db)"
+  sleep 2
+done
+
+step "Checking the database password"
+# Over TCP with the container's own POSTGRES_PASSWORD (local socket connections skip the password)
+$SSH 'docker exec mficrm-db sh -c '"'"'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U mficrm -d mficrm -tAc "select 1"'"'"'' >/dev/null \
+  || die "Postgres rejects its own POSTGRES_PASSWORD"
+got_hash=$($SSH 'docker exec mficrm-db sh -c '"'"'printf %s "$POSTGRES_PASSWORD"'"'"'' | sha)
+[ "$got_hash" = "$want_hash" ] || die "the database got a different password from the one in Bitwarden"
+echo "The database password matches Bitwarden (compared by SHA-256)."
+
+step "Starting the backup accessories"
+kamal accessory boot backups
+kamal accessory boot uploads-backup
+
+step "Deploying the app"
+kamal deploy
+
+step "Health check"
+for i in $(seq 1 30); do
+  if curl -fsS https://crm.mfitrading.co.uk/api/health >/dev/null 2>&1; then
+    echo "https://crm.mfitrading.co.uk is up."
+    break
+  fi
+  [ "$i" = 30 ] && die "the health check didn't pass (kamal logs)"
+  sleep 2
+done
+
+cat <<'EOF'
+
+Done. Next:
+  - log in as admin with ADMIN_PASSWORD from Bitwarden, and change it
+  - npm run claude:login     (the Claude login was on the deleted volume)
+EOF
