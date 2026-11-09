@@ -31,7 +31,11 @@ bw sync >/dev/null
 secrets=$(kamal secrets print) || die "kamal secrets print failed"
 pg_password=$(printf '%s\n' "$secrets" | sed -n 's/^POSTGRES_PASSWORD=//p')
 database_url=$(printf '%s\n' "$secrets" | sed -n 's/^DATABASE_URL=//p')
+session_password=$(printf '%s\n' "$secrets" | sed -n 's/^NUXT_SESSION_PASSWORD=//p')
 unset secrets
+# nuxt-auth-utils refuses shorter keys, and every login then fails with a server error
+[ "${#session_password}" -ge 32 ] || die "NUXT_SESSION_PASSWORD must be at least 32 characters (openssl rand -hex 32)"
+unset session_password
 [ -n "$pg_password" ] || die "POSTGRES_PASSWORD is empty"
 [[ "$pg_password" =~ ^[A-Za-z0-9]+$ ]] || die "POSTGRES_PASSWORD must contain only letters and digits (e.g. openssl rand -hex 24)"
 [ "$database_url" = "postgresql://mficrm:$pg_password@mficrm-db:5432/mficrm" ] || die "DATABASE_URL in .kamal/secrets doesn't match POSTGRES_PASSWORD"

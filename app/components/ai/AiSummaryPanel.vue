@@ -24,17 +24,44 @@ onMounted(async () => {
   }
 })
 
+// The proxy in front of the app (kamal-proxy, then Cloudflare at 100 s) can give up on a long request while the
+// server carries on and saves the summary. Then wait for the saved one instead of reporting a failure.
+const GATEWAY_TIMEOUTS = [502, 504, 524]
+const WAIT_FOR_SAVED_MS = 5 * 60 * 1000
+
+async function waitForSaved(startedAt: number): Promise<boolean> {
+  while (Date.now() - startedAt < WAIT_FOR_SAVED_MS) {
+    await new Promise(r => setTimeout(r, 5000))
+    try {
+      const res = await $fetch<{ summary: AiSummary | null, ai_summary_at: string | null }>(`/api/businesses/${props.businessId}/ai/summary`)
+      if (res.summary && res.ai_summary_at && new Date(res.ai_summary_at).getTime() >= startedAt - 5000) {
+        summary.value = res.summary
+        madeAt.value = res.ai_summary_at
+        skipped.value = []
+        return true
+      }
+    } catch {}
+  }
+  return false
+}
+
 async function generate() {
   error.value = ''
   generating.value = true
+  const startedAt = Date.now()
   try {
     const res = await $fetch<{ summary: AiSummary, ai_summary_at: string, skipped: { name: string, reason: string }[] }>(
-      `/api/businesses/${props.businessId}/ai/summary`, { method: 'POST' })
+      `/api/businesses/${props.businessId}/ai/summary`, { method: 'POST', timeout: WAIT_FOR_SAVED_MS })
     summary.value = res.summary
     madeAt.value = res.ai_summary_at
     skipped.value = res.skipped
   } catch (e) {
-    error.value = errorMessage(e, 'The summary could not be made')
+    const status = (e as { statusCode?: number, status?: number })?.statusCode ?? (e as { status?: number })?.status
+    if (status && GATEWAY_TIMEOUTS.includes(status)) {
+      if (!(await waitForSaved(startedAt))) error.value = 'Claude is taking too long. Try again in a few minutes.'
+    } else {
+      error.value = errorMessage(e, 'The summary could not be made')
+    }
   } finally {
     generating.value = false
   }

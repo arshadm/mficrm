@@ -40,7 +40,7 @@ AcquireDesk deploys with [Kamal 2](https://kamal-deploy.org), the same way as st
    - **SSL/TLS mode:** _Full (strict)_. The host firewall should already allow ports 80 and 443 only from Cloudflare.
 4. **Secrets:** create a Bitwarden item `mficrm-prod` with these fields:
    - `POSTGRES_PASSWORD`: `openssl rand -hex 24`. Letters and digits only: it goes into `DATABASE_URL` as is, and Kamal doubles backslashes in the env files it writes. Postgres sets the password only when its data directory is first created, so changing this field later doesn't change the database's password: run `ALTER USER mficrm PASSWORD '…'` in `kamal psql` first (or start over, below).
-   - `NUXT_SESSION_PASSWORD`: `openssl rand -hex 32`. Changing it logs everyone out.
+   - `NUXT_SESSION_PASSWORD`: `openssl rand -hex 32`. At least 32 characters, or every login fails with a server error ("Password string too short" in `kamal logs`). Changing it logs everyone out.
    - `ADMIN_PASSWORD`: a strong password. It is only used to create the admin user on the first boot; change it in the app afterwards.
    - `SMTP_USER`, `SMTP_PASS`: the Google Workspace account that sends reminder emails (e.g. `crm@mfitrading.co.uk`) and an **App Password** for it, not its normal password. App Passwords need 2-Step Verification on the account: Google Account → Security → 2-Step Verification → App passwords.
    - `ORIGIN_CERTIFICATE_B64`, `ORIGIN_PRIVATE_KEY_B64`: from step 3.

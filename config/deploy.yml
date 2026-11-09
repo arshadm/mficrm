@@ -29,6 +29,9 @@ proxy:
     path: /api/health
     interval: 3
     timeout: 5
+  # The AI requests (summary, prefill, form drafting) take up to a minute or two; the default of 30 s cut them off
+  # with a 504. Cloudflare in front still stops any request at 100 s on standard plans.
+  response_timeout: 120
   # Attachments are capped at 20 MB each by the app
   buffering:
     max_request_body: 26_214_400
